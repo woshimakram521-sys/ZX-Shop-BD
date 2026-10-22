@@ -587,8 +587,8 @@
     }
   ],
   "settings": {
-    "storeName": "ZX Shop",
-    "storeTagline": "আপনার পছন্দের অনলাইন শপ",
+    "storeName": "ZX Shop – বাংলা ই-কমার্স",
+    "storeTagline": "আপনার পছন্দের প্রিমিয়াম অনলাইন শপ",
     "logoUrl": "",
     "contactPhone": "+880 1711-234567",
     "whatsappNumber": "+880 1711-234567",
@@ -622,7 +622,8 @@
     "resellerMinPayoutAmount": 500,
     "resellerRegistrationRegularFee": 1000,
     "resellerRegistrationDiscountedFee": 300,
-    "resellerReferralBonus": 100
+    "resellerReferralBonus": 100,
+    "resellerOrderDeliveryFee": 100
   },
   "adminCredentials": {
     "username": "admin",
@@ -700,7 +701,8 @@
   "resellerSessions": {
     "reseller_1792396896027_03fdb766d6f3e2d1a5ffdb455c30eca7": "reseller-demo-1",
     "reseller_1792396951475_3a92b42351fc16c27c9c45a0df4f68b9": "reseller-demo-1",
-    "reseller_1792398071759_d5dc70138c56c1c837298085ceabf664": "reseller-demo-1"
+    "reseller_1792398071759_d5dc70138c56c1c837298085ceabf664": "reseller-demo-1",
+    "reseller_1792398364261_78b569a8ca72d94d3fccdf22cef578ab": "reseller-1792398364253"
   },
   "resellerWithdrawals": []
 }

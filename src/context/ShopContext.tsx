@@ -121,7 +121,20 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(initialRoute.categorySlug);
   const [searchQuery, setSearchQuery] = useState<string>('');
   
-  const [settings, setSettings] = useState<StoreSettings>(fallbackSettings);
+  const [settings, setSettings] = useState<StoreSettings>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const custom = localStorage.getItem('zx_custom_settings');
+        if (custom) {
+          const parsed = JSON.parse(custom);
+          if (parsed && typeof parsed === 'object') {
+            return { ...fallbackSettings, ...parsed };
+          }
+        }
+      } catch {}
+    }
+    return fallbackSettings;
+  });
   const [categories, setCategories] = useState<Category[]>(fallbackCategories);
   const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(fallbackDeliveryZones);
   const [products, setProducts] = useState<Product[]>(fallbackProducts);
@@ -186,10 +199,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // 1. First, load from localStorage if available
       if (typeof window !== 'undefined') {
         try {
+          const custom = localStorage.getItem('zx_custom_settings');
+          if (custom) {
+            const parsed = JSON.parse(custom);
+            if (parsed) setSettings(prev => ({ ...prev, ...parsed }));
+          }
           const cached = localStorage.getItem('zx_shop_cache');
           if (cached) {
             const cachedData = JSON.parse(cached);
-            if (cachedData.settings) setSettings(cachedData.settings);
+            if (cachedData.settings) setSettings(prev => ({ ...prev, ...cachedData.settings }));
             if (cachedData.categories?.length) setCategories(cachedData.categories);
             if (cachedData.deliveryZones?.length) setDeliveryZones(cachedData.deliveryZones);
             if (cachedData.products?.length) {
@@ -214,7 +232,16 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (contentType.includes('application/json')) {
             const data = await res.json();
             if (data && Array.isArray(data.products) && data.products.length > 0) {
-              setSettings(data.settings || fallbackSettings);
+              let mergedSettings = data.settings || fallbackSettings;
+              if (typeof window !== 'undefined') {
+                try {
+                  const custom = localStorage.getItem('zx_custom_settings');
+                  if (custom) {
+                    mergedSettings = { ...mergedSettings, ...JSON.parse(custom) };
+                  }
+                } catch {}
+              }
+              setSettings(mergedSettings);
               setCategories(data.categories?.length ? data.categories : fallbackCategories);
               setDeliveryZones(data.deliveryZones?.length ? data.deliveryZones : fallbackDeliveryZones);
               setProducts(data.products);

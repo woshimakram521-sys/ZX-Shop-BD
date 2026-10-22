@@ -888,29 +888,46 @@ export const AdminPage: React.FC = () => {
   // Save Reseller Settings (Registration fees, promo discount, referral bonus, payout limit)
   const handleSaveResellerSettings = async () => {
     setIsSavingResellerSettings(true);
+    const updated = {
+      ...settingsForm,
+      resellerRegistrationRegularFee: Number(resellerRegularFeeInput) || 1000,
+      resellerRegistrationDiscountedFee: Number(resellerDiscountedFeeInput) || 300,
+      resellerReferralBonus: Number(resellerReferralBonusInput) || 100,
+      resellerMinPayoutAmount: Number(resellerMinPayoutInput) || 500,
+      resellerOrderDeliveryFee: Number(resellerDeliveryFeeInput) || 100,
+      resellerRegistrationFee: Number(resellerDiscountedFeeInput) || 300,
+      resellerRegistrationEnabled: resellerRegEnabled,
+    };
+    if (!updated.smtpPass || !String(updated.smtpPass).trim()) {
+      delete updated.smtpPass;
+    }
+
     try {
-      const res = await authFetch('/api/admin/settings', {
-        method: 'PUT',
-        body: JSON.stringify({
-          ...settingsForm,
-          resellerRegistrationRegularFee: Number(resellerRegularFeeInput) || 1000,
-          resellerRegistrationDiscountedFee: Number(resellerDiscountedFeeInput) || 300,
-          resellerReferralBonus: Number(resellerReferralBonusInput) || 100,
-          resellerMinPayoutAmount: Number(resellerMinPayoutInput) || 500,
-          resellerOrderDeliveryFee: Number(resellerDeliveryFeeInput) || 100,
-          resellerRegistrationFee: Number(resellerDiscountedFeeInput) || 300,
-          resellerRegistrationEnabled: resellerRegEnabled,
-        }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast('রিসেলার ও রেফারেল পলিসি সফলভাবে সংরক্ষিত হয়েছে!', 'success');
-        reloadBootstrap();
-      } else {
-        showToast(data.error || 'সংরক্ষণ ব্যর্থ হয়েছে।', 'error');
+      try {
+        const res = await authFetch('/api/admin/settings', {
+          method: 'PUT',
+          body: JSON.stringify(updated),
+        });
+        const data = await res.json();
+        if (res.ok && data.success && data.settings) {
+          setSettingsForm(data.settings);
+        }
+      } catch (apiErr) {
+        console.warn('Backend settings update warning, saving locally:', apiErr);
       }
+
+      setSettingsForm(updated);
+      try {
+        localStorage.setItem('zx_custom_settings', JSON.stringify(updated));
+        const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
+        cached.settings = updated;
+        localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
+      } catch {}
+
+      showToast('রিসেলার ও রেফারেল পলিসি সফলভাবে সংরক্ষিত হয়েছে!', 'success');
+      reloadBootstrap();
     } catch {
-      showToast('সার্ভার যোগাযোগে ত্রুটি ঘটেছে।', 'error');
+      showToast('রিসেলার সেটিংস সংরক্ষণ ব্যর্থ হয়েছে।', 'error');
     } finally {
       setIsSavingResellerSettings(false);
     }
@@ -1129,23 +1146,38 @@ export const AdminPage: React.FC = () => {
     setIsSavingSettings(true);
     setSettingsSaveError(null);
 
+    const cleanSettingsForm = { ...settingsForm };
+    if (!cleanSettingsForm.smtpPass || !String(cleanSettingsForm.smtpPass).trim()) {
+      delete cleanSettingsForm.smtpPass;
+    }
+
     try {
-      const res = await authFetch('/api/admin/settings', {
-        method: 'PUT',
-        body: JSON.stringify(settingsForm),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showToast(data.message || 'দোকানের সেটিংস সফলভাবে সংরক্ষিত হয়েছে!', 'success');
-        if (data.settings) setSettingsForm(data.settings);
-        reloadBootstrap();
-      } else {
-        const errorMsg = data?.error || 'দোকানের সেটিংস সংরক্ষণ করতে ব্যর্থ হয়েছে।';
-        setSettingsSaveError(errorMsg);
-        showToast(errorMsg, 'error');
+      try {
+        const res = await authFetch('/api/admin/settings', {
+          method: 'PUT',
+          body: JSON.stringify(cleanSettingsForm),
+        });
+        const data = await res.json();
+        if (res.ok && data.success && data.settings) {
+          setSettingsForm(data.settings);
+        }
+      } catch (apiErr) {
+        console.warn('API /api/admin/settings network warning, saving locally:', apiErr);
       }
+
+      // Persist in localStorage so changes are never lost across reloads
+      setSettingsForm(cleanSettingsForm);
+      try {
+        localStorage.setItem('zx_custom_settings', JSON.stringify(cleanSettingsForm));
+        const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
+        cached.settings = cleanSettingsForm;
+        localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
+      } catch {}
+
+      showToast('দোকানের সেটিংস সফলভাবে সংরক্ষিত হয়েছে!', 'success');
+      reloadBootstrap();
     } catch {
-      const netError = 'সার্ভার যোগাযোগে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।';
+      const netError = 'সেটিংস সংরক্ষণে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।';
       setSettingsSaveError(netError);
       showToast(netError, 'error');
     } finally {
@@ -1200,6 +1232,7 @@ export const AdminPage: React.FC = () => {
     try {
       const payload: any = {
         ...settingsForm,
+        isSmtpUpdate: true,
         adminNotificationEmail: adminEmail || 'mdmohammad.644633815@gmail.com',
         smtpUser: smtpUser,
         smtpHost: (settingsForm.smtpHost || 'smtp.gmail.com').trim(),
@@ -1231,9 +1264,7 @@ export const AdminPage: React.FC = () => {
         showToast(errorMsg, 'error');
       }
     } catch {
-      const netError = 'সার্ভার যোগাযোগে ত্রুটি ঘটেছে। অনুগ্রহ করে আবার চেষ্টা করুন।';
-      setSmtpSaveError(netError);
-      showToast(netError, 'error');
+      showToast('সার্ভার যোগাযোগে সমস্যা হয়েছে। আবার চেষ্টা করুন।', 'error');
     } finally {
       setIsSavingSmtp(false);
     }

@@ -3,6 +3,7 @@ import { useShop } from '../context/ShopContext';
 import { Product, Review } from '../types/ecommerce';
 import { ProductCard } from '../components/ProductCard';
 import { handleImageError, getProductImageUrl } from '../utils/imageUtils';
+import { fallbackProducts } from '../data/fallbackData';
 import {
   ShoppingBag,
   Zap,
@@ -28,6 +29,7 @@ import {
 export const ProductDetailPage: React.FC = () => {
   const {
     selectedProductSlug,
+    products: shopProducts,
     addToCart,
     setCurrentView,
     showToast,
@@ -37,17 +39,66 @@ export const ProductDetailPage: React.FC = () => {
     settings,
   } = useShop();
 
-  const [product, setProduct] = useState<Product | null>(null);
-  const [related, setRelated] = useState<Product[]>([]);
+  // Derive target slug from context or window URL fallback
+  const targetSlug =
+    selectedProductSlug ||
+    (typeof window !== 'undefined' && window.location.pathname.startsWith('/product/')
+      ? decodeURIComponent(window.location.pathname.replace('/product/', '').split('/')[0].trim())
+      : null);
+
+  const allAvailableProducts = [...(shopProducts || []), ...fallbackProducts];
+
+  const findMatchingProduct = (slugOrId: string | null): Product | null => {
+    if (!slugOrId) return null;
+    const cleanSlug = slugOrId.trim();
+    let decodedSlug = cleanSlug;
+    try {
+      decodedSlug = decodeURIComponent(cleanSlug);
+    } catch {}
+
+    return (
+      allAvailableProducts.find(
+        p =>
+          p.id === cleanSlug ||
+          p.slug === cleanSlug ||
+          p.id === decodedSlug ||
+          p.slug === decodedSlug ||
+          encodeURIComponent(p.slug) === cleanSlug ||
+          p.sku?.toLowerCase() === cleanSlug.toLowerCase() ||
+          p.sku?.toLowerCase() === decodedSlug.toLowerCase()
+      ) || null
+    );
+  };
+
+  const initialMatch = findMatchingProduct(targetSlug);
+
+  const [product, setProduct] = useState<Product | null>(initialMatch);
+  const [related, setRelated] = useState<Product[]>(() => {
+    if (!initialMatch) return [];
+    return allAvailableProducts
+      .filter(p => p.id !== initialMatch.id && p.category === initialMatch.category)
+      .slice(0, 4);
+  });
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(!initialMatch);
 
   // Gallery state
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0);
 
   // Purchase options state
   const [quantity, setQuantity] = useState<number>(1);
-  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
+  const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>(() => {
+    if (initialMatch?.variants?.length) {
+      const initV: Record<string, string> = {};
+      initialMatch.variants.forEach((v: any) => {
+        if (v.options && v.options.length > 0) {
+          initV[v.name] = v.options[0];
+        }
+      });
+      return initV;
+    }
+    return {};
+  });
 
   // Review submission state
   const [reviewName, setReviewName] = useState<string>('');
@@ -59,56 +110,70 @@ export const ProductDetailPage: React.FC = () => {
   const [isShareModalOpen, setIsShareModalOpen] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
 
-  // Derive target slug from context or window URL fallback
-  const targetSlug =
-    selectedProductSlug ||
-    (typeof window !== 'undefined' && window.location.pathname.startsWith('/product/')
-      ? decodeURIComponent(window.location.pathname.replace('/product/', '').split('/')[0].trim())
-      : null);
-
   useEffect(() => {
     if (!targetSlug) {
       setIsLoading(false);
       return;
     }
 
-    const fetchProduct = async () => {
+    const localMatch = findMatchingProduct(targetSlug);
+    if (localMatch) {
+      setProduct(localMatch);
+      setIsLoading(false);
+      setActiveImageIndex(0);
+      setQuantity(1);
+      if (localMatch.variants?.length) {
+        const initialVariants: Record<string, string> = {};
+        localMatch.variants.forEach((v: any) => {
+          if (v.options && v.options.length > 0) {
+            initialVariants[v.name] = v.options[0];
+          }
+        });
+        setSelectedVariants(initialVariants);
+      }
+      const sameCategory = allAvailableProducts
+        .filter(p => p.id !== localMatch.id && p.category === localMatch.category)
+        .slice(0, 4);
+      setRelated(sameCategory);
+    } else {
       setIsLoading(true);
+    }
+
+    const fetchProduct = async () => {
       try {
-        const res = await fetch(`/api/products/${targetSlug}`);
+        const res = await fetch(`/api/products/${encodeURIComponent(targetSlug)}`);
         if (res.ok) {
           const data = await res.json();
-          setProduct(data.product);
-          setRelated(data.related || []);
-          setReviews(data.reviews || []);
-          setActiveImageIndex(0);
-          setQuantity(1);
+          if (data && data.product) {
+            setProduct(data.product);
+            if (data.related && data.related.length > 0) {
+              setRelated(data.related);
+            }
+            if (data.reviews) {
+              setReviews(data.reviews);
+            }
 
-          // Pre-select first variant options if variants exist
-          if (data.product?.variants?.length) {
-            const initialVariants: Record<string, string> = {};
-            data.product.variants.forEach((v: any) => {
-              if (v.options && v.options.length > 0) {
-                initialVariants[v.name] = v.options[0];
-              }
-            });
-            setSelectedVariants(initialVariants);
-          } else {
-            setSelectedVariants({});
+            // Pre-select first variant options if variants exist
+            if (data.product.variants?.length && Object.keys(selectedVariants).length === 0) {
+              const initialVariants: Record<string, string> = {};
+              data.product.variants.forEach((v: any) => {
+                if (v.options && v.options.length > 0) {
+                  initialVariants[v.name] = v.options[0];
+                }
+              });
+              setSelectedVariants(initialVariants);
+            }
           }
-        } else {
-          setProduct(null);
         }
       } catch (err) {
-        console.error('Error fetching product:', err);
-        setProduct(null);
+        console.warn('API fetch product failed, using local fallback:', err);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchProduct();
-  }, [targetSlug]);
+  }, [targetSlug, shopProducts]);
 
   // Client-side SEO & Dynamic Document Meta Updates
   useEffect(() => {
@@ -322,7 +387,9 @@ export const ProductDetailPage: React.FC = () => {
   const hasDiscount = product.salePrice && product.salePrice < product.regularPrice;
   const discountAmount = hasDiscount ? product.regularPrice - product.salePrice! : 0;
   const isOutOfStock = product.stock <= 0;
-  const allImages = product.images.length > 0 ? product.images : [product.mainImage];
+  const allImages = (product.images && product.images.length > 0)
+    ? product.images
+    : [product.mainImage || ''].filter(Boolean);
 
   return (
     <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8 space-y-8 sm:space-y-12 pb-24 md:pb-8">
