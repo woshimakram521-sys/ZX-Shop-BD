@@ -2440,12 +2440,19 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, HOST, () => {
-    console.log(`ZX Shop server running at http://${HOST}:${PORT} (${isProd ? 'production' : 'development'})`);
+  if (!process.env.VERCEL && !process.env.NOW_REGION) {
+    app.listen(PORT, HOST, () => {
+      console.log(`ZX Shop server running at http://${HOST}:${PORT} (${isProd ? 'production' : 'development'})`);
+    });
+  }
+}
+
+if (!process.env.VERCEL && !process.env.NOW_REGION) {
+  startServer().catch(err => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
   });
 }
 
-startServer().catch(err => {
-  console.error('Failed to start server:', err);
-  process.exit(1);
-});
+export { app };
+export default app;

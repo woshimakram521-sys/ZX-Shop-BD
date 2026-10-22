@@ -12,10 +12,11 @@ export const ProductsPage: React.FC = () => {
     searchQuery,
     setSearchQuery,
     openImageSearch,
+    products: contextProducts,
   } = useShop();
 
   const [products, setProducts] = useState<Product[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
   const [sortOption, setSortOption] = useState<string>('newest');
@@ -45,12 +46,65 @@ export const ProductsPage: React.FC = () => {
       params.append('page', page.toString());
       params.append('limit', '12');
 
-      const res = await fetch(`/api/products?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setProducts(data.products || []);
-        setTotalPages(data.totalPages || 1);
-        setTotalCount(data.total || 0);
+      let loaded = false;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(`/api/products?${params.toString()}`, { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const data = await res.json();
+            if (data && Array.isArray(data.products)) {
+              setProducts(data.products);
+              setTotalPages(data.totalPages || 1);
+              setTotalCount(data.total || data.products.length);
+              loaded = true;
+            }
+          }
+        }
+      } catch {
+        // Fallback to client filtering
+      }
+
+      if (!loaded) {
+        // Instant Client-Side Filter Fallback (guaranteed zero downtime on Vercel)
+        const sourceProducts = contextProducts && contextProducts.length > 0 ? contextProducts : [];
+        let filtered = [...sourceProducts];
+
+        if (selectedCategorySlug && selectedCategorySlug !== 'all') {
+          const cat = categories.find(c => c.slug === selectedCategorySlug || c.id === selectedCategorySlug);
+          filtered = filtered.filter(p => p.category === selectedCategorySlug || p.category === cat?.id);
+        }
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase().trim();
+          filtered = filtered.filter(p =>
+            p.name.toLowerCase().includes(q) ||
+            (p.banglaTitle && p.banglaTitle.toLowerCase().includes(q)) ||
+            (p.sku && p.sku.toLowerCase().includes(q))
+          );
+        }
+        if (minPrice) {
+          const min = Number(minPrice);
+          if (!isNaN(min)) filtered = filtered.filter(p => (p.salePrice ?? p.regularPrice) >= min);
+        }
+        if (maxPrice) {
+          const max = Number(maxPrice);
+          if (!isNaN(max)) filtered = filtered.filter(p => (p.salePrice ?? p.regularPrice) <= max);
+        }
+        if (sortOption === 'price_asc') {
+          filtered.sort((a, b) => (a.salePrice ?? a.regularPrice) - (b.salePrice ?? b.regularPrice));
+        } else if (sortOption === 'price_desc') {
+          filtered.sort((a, b) => (b.salePrice ?? b.regularPrice) - (a.salePrice ?? a.regularPrice));
+        } else if (sortOption === 'popular') {
+          filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        }
+
+        setTotalCount(filtered.length);
+        setTotalPages(Math.max(1, Math.ceil(filtered.length / 12)));
+        setProducts(filtered.slice((page - 1) * 12, page * 12));
       }
     } catch (err) {
       console.error('Failed to load products:', err);

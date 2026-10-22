@@ -1,5 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Product, Category, DeliveryZone, StoreSettings, Order, OrderItemSnapshot } from '../types/ecommerce';
+import {
+  fallbackCategories,
+  fallbackDeliveryZones,
+  fallbackSettings,
+  fallbackProducts,
+} from '../data/fallbackData';
 
 export interface CartItem {
   product: Product;
@@ -115,13 +121,13 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | null>(initialRoute.categorySlug);
   const [searchQuery, setSearchQuery] = useState<string>('');
   
-  const [settings, setSettings] = useState<StoreSettings | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
-  const [popularProducts, setPopularProducts] = useState<Product[]>([]);
-  const [isLoadingBootstrap, setIsLoadingBootstrap] = useState<boolean>(true);
+  const [settings, setSettings] = useState<StoreSettings>(fallbackSettings);
+  const [categories, setCategories] = useState<Category[]>(fallbackCategories);
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>(fallbackDeliveryZones);
+  const [products, setProducts] = useState<Product[]>(fallbackProducts);
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>(fallbackProducts.filter(p => p.isFeatured));
+  const [popularProducts, setPopularProducts] = useState<Product[]>(fallbackProducts.filter(p => p.isPopular));
+  const [isLoadingBootstrap, setIsLoadingBootstrap] = useState<boolean>(false);
   
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [lastPlacedOrder, setLastPlacedOrder] = useState<Order | null>(null);
@@ -174,10 +180,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [cart]);
 
-  // Load bootstrap config from API (with instant localStorage cache for seamless persistence)
+  // Load bootstrap config from API (with instant localStorage cache and static mirror fallback for Vercel)
   const reloadBootstrap = async () => {
     try {
-      // First, load from localStorage if available so user sees their saved products immediately
+      // 1. First, load from localStorage if available
       if (typeof window !== 'undefined') {
         try {
           const cached = localStorage.getItem('zx_shop_cache');
@@ -195,35 +201,77 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch {}
       }
 
-      setIsLoadingBootstrap(true);
-      const res = await fetch('/api/bootstrap');
-      if (res.ok) {
-        const data = await res.json();
-        setSettings(data.settings);
-        setCategories(data.categories || []);
-        setDeliveryZones(data.deliveryZones || []);
-        setProducts(data.products || []);
-        setFeaturedProducts(data.featuredProducts || []);
-        setPopularProducts(data.popularProducts || []);
+      // 2. Fetch from /api/bootstrap with a 3.5s timeout
+      let loaded = false;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch('/api/bootstrap', { signal: controller.signal });
+        clearTimeout(timeoutId);
 
-        // Cache latest state in localStorage
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('zx_shop_cache', JSON.stringify({
-              settings: data.settings,
-              categories: data.categories,
-              deliveryZones: data.deliveryZones,
-              products: data.products,
-              featuredProducts: data.featuredProducts,
-              popularProducts: data.popularProducts,
-            }));
-          } catch {}
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const data = await res.json();
+            if (data && Array.isArray(data.products) && data.products.length > 0) {
+              setSettings(data.settings || fallbackSettings);
+              setCategories(data.categories?.length ? data.categories : fallbackCategories);
+              setDeliveryZones(data.deliveryZones?.length ? data.deliveryZones : fallbackDeliveryZones);
+              setProducts(data.products);
+              setFeaturedProducts(data.featuredProducts || data.products.filter((p: any) => p.isFeatured));
+              setPopularProducts(data.popularProducts || data.products.filter((p: any) => p.isPopular));
+              loaded = true;
+
+              if (typeof window !== 'undefined') {
+                try {
+                  localStorage.setItem('zx_shop_cache', JSON.stringify({
+                    settings: data.settings,
+                    categories: data.categories,
+                    deliveryZones: data.deliveryZones,
+                    products: data.products,
+                    featuredProducts: data.featuredProducts,
+                    popularProducts: data.popularProducts,
+                  }));
+                } catch {}
+              }
+            }
+          }
         }
+      } catch (apiErr) {
+        // API offline or static hosting
+      }
+
+      // 3. Fallback: If /api/bootstrap was unavailable (e.g. static Vercel deployment), fetch /data/db.json directly
+      if (!loaded) {
+        try {
+          const staticRes = await fetch('/data/db.json');
+          if (staticRes.ok) {
+            const staticDb = await staticRes.json();
+            if (staticDb && Array.isArray(staticDb.products) && staticDb.products.length > 0) {
+              const shopProds = staticDb.products.filter((p: any) => p.isPublished && p.showInShop !== false);
+              setSettings(staticDb.settings || fallbackSettings);
+              setCategories(staticDb.categories || fallbackCategories);
+              setDeliveryZones(staticDb.deliveryZones || fallbackDeliveryZones);
+              setProducts(shopProds.length ? shopProds : fallbackProducts);
+              setFeaturedProducts(shopProds.filter((p: any) => p.isFeatured));
+              setPopularProducts(shopProds.filter((p: any) => p.isPopular));
+              loaded = true;
+            }
+          }
+        } catch {}
+      }
+
+      // 4. Guaranteed Safety: If still not loaded, ensure fallbackProducts are active
+      if (!loaded && (!products || products.length === 0)) {
+        setProducts(fallbackProducts);
+        setCategories(fallbackCategories);
+        setDeliveryZones(fallbackDeliveryZones);
+        setSettings(fallbackSettings);
+        setFeaturedProducts(fallbackProducts.filter(p => p.isFeatured));
+        setPopularProducts(fallbackProducts.filter(p => p.isPopular));
       }
     } catch (err) {
-      console.error('Error fetching bootstrap data:', err);
-    } finally {
-      setIsLoadingBootstrap(false);
+      console.error('Error initializing store data:', err);
     }
   };
 

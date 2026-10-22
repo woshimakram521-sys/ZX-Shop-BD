@@ -622,7 +622,8 @@
     "resellerMinPayoutAmount": 500,
     "resellerRegistrationRegularFee": 1000,
     "resellerRegistrationDiscountedFee": 300,
-    "resellerReferralBonus": 100
+    "resellerReferralBonus": 100,
+    "resellerOrderDeliveryFee": 100
   },
   "adminCredentials": {
     "username": "admin",

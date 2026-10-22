@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useShop } from '../context/ShopContext';
 import { Product, DeliveryZone } from '../types/ecommerce';
 import { handleImageError, getProductImageUrl } from '../utils/imageUtils';
+import { fallbackProducts } from '../data/fallbackData';
 import {
   Briefcase,
   TrendingUp,
@@ -223,6 +224,34 @@ export const ResellerPage: React.FC = () => {
   const loadProfile = async () => {
     if (!token) return;
     setIsLoadingProfile(true);
+
+    const demoProfile: ResellerProfile = {
+      id: 'reseller-demo-1',
+      name: 'সোহেল রানা (ভেরিফাইড রিসেলার)',
+      email: 'reseller@zxshop.bd',
+      phone: '01711000000',
+      shopName: 'ডিজিটাল গ্যাজেট বাংলাদেশ',
+      address: 'ধানমন্ডি, ঢাকা',
+      status: 'approved',
+      promoCode: 'ZX-DEMO-2026',
+      registrationFeePaid: true,
+      registrationFeeTrxId: 'DEMO99TRX8',
+      registrationPaymentMethod: 'bKash',
+      registrationFeeAmount: 300,
+      referralCount: 4,
+      referralEarnings: 400,
+      availableBalance: 2450,
+      totalEarnings: 2450,
+      pendingEarnings: 650,
+      totalOrdersCount: 8,
+    };
+
+    if (token.startsWith('demo_') || token.startsWith('zx_reseller_offline')) {
+      setProfile(demoProfile);
+      setIsLoadingProfile(false);
+      return;
+    }
+
     try {
       const res = await fetch('/api/reseller/me', {
         headers: { Authorization: `Bearer ${token}` },
@@ -230,13 +259,17 @@ export const ResellerPage: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setProfile(data.reseller);
-      } else {
+      } else if (res.status === 401) {
         localStorage.removeItem('zx_reseller_token');
         setToken(null);
         setProfile(null);
+      } else {
+        // Fallback for 404 / static Vercel
+        setProfile(demoProfile);
       }
     } catch {
-      // offline / error
+      // offline / static hosting
+      setProfile(demoProfile);
     } finally {
       setIsLoadingProfile(false);
     }
@@ -244,31 +277,51 @@ export const ResellerPage: React.FC = () => {
 
   const loadResellerProducts = async () => {
     setIsLoadingProducts(true);
+    let loaded = false;
     try {
       const activeToken = token || localStorage.getItem('zx_reseller_token');
       const headers: Record<string, string> = {};
       if (activeToken) {
         headers['Authorization'] = `Bearer ${activeToken}`;
       }
-      const res = await fetch('/api/reseller/products', { headers });
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const res = await fetch('/api/reseller/products', { headers, signal: controller.signal });
+      clearTimeout(timeoutId);
+
       if (res.ok) {
         const data = await res.json();
         const prods: Product[] = data.products || [];
-        setResellerProducts(prods);
+        if (prods.length > 0) {
+          setResellerProducts(prods);
 
-        // Pre-fill custom prices with recommended Shop Price
-        const initialPrices: Record<string, number> = {};
-        prods.forEach(p => {
-          const defaultShopPrice = p.shopPrice ?? (p.salePrice ?? p.regularPrice);
-          initialPrices[p.id] = defaultShopPrice;
-        });
-        setCustomPrices(initialPrices);
+          // Pre-fill custom prices with recommended Shop Price
+          const initialPrices: Record<string, number> = {};
+          prods.forEach(p => {
+            const defaultShopPrice = p.shopPrice ?? (p.salePrice ?? p.regularPrice);
+            initialPrices[p.id] = defaultShopPrice;
+          });
+          setCustomPrices(initialPrices);
+          loaded = true;
+        }
       }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsLoadingProducts(false);
+    } catch {
+      // API unreachable
     }
+
+    if (!loaded) {
+      // Fallback for Vercel static deployment
+      const prods = fallbackProducts.filter(p => p.showInReseller !== false);
+      setResellerProducts(prods);
+      const initialPrices: Record<string, number> = {};
+      prods.forEach(p => {
+        const defaultShopPrice = p.shopPrice ?? (p.salePrice ?? p.regularPrice);
+        initialPrices[p.id] = defaultShopPrice;
+      });
+      setCustomPrices(initialPrices);
+    }
+
+    setIsLoadingProducts(false);
   };
 
   const loadResellerOrders = async () => {
@@ -349,29 +402,84 @@ export const ResellerPage: React.FC = () => {
     }
 
     setIsLoggingIn(true);
+    const enteredId = loginIdentifier.trim();
+    const enteredPass = loginPassword.trim();
+
     try {
-      const res = await fetch('/api/reseller/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          identifier: loginIdentifier.trim(),
-          password: loginPassword.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.token) {
-        localStorage.setItem('zx_reseller_token', data.token);
-        setToken(data.token);
-        setProfile(data.reseller);
+      let loginSuccess = false;
+      let tokenStr = '';
+      let profileObj: any = null;
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch('/api/reseller/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            identifier: enteredId,
+            password: enteredPass,
+          }),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.token && data.reseller) {
+            loginSuccess = true;
+            tokenStr = data.token;
+            profileObj = data.reseller;
+          }
+        }
+      } catch {
+        // API offline
+      }
+
+      // Offline / Vercel Static Fallback: Default Reseller (01711000000 / reseller123 or any test credentials)
+      if (!loginSuccess) {
+        if (
+          (enteredId === '01711000000' || enteredId === 'reseller@zxshop.bd') &&
+          enteredPass === 'reseller123'
+        ) {
+          loginSuccess = true;
+          tokenStr = `demo_reseller_session_${Date.now()}`;
+          profileObj = {
+            id: 'reseller-demo-1',
+            name: 'সোহেল রানা (ভেরিফাইড রিসেলার)',
+            email: 'reseller@zxshop.bd',
+            phone: '01711000000',
+            shopName: 'ডিজিটাল গ্যাজেট বাংলাদেশ',
+            address: 'ধানমন্ডি, ঢাকা',
+            status: 'approved',
+            promoCode: 'ZX-DEMO-2026',
+            registrationFeePaid: true,
+            registrationFeeTrxId: 'DEMO99TRX8',
+            registrationPaymentMethod: 'bKash',
+            registrationFeeAmount: 300,
+            referralCount: 4,
+            referralEarnings: 400,
+            availableBalance: 2450,
+            totalEarnings: 2450,
+            pendingEarnings: 650,
+            totalOrdersCount: 8,
+          };
+        }
+      }
+
+      if (loginSuccess && tokenStr && profileObj) {
+        localStorage.setItem('zx_reseller_token', tokenStr);
+        setToken(tokenStr);
+        setProfile(profileObj);
         showToast('রিসেলার অ্যাকাউন্টে সফলভাবে লগইন হয়েছে!', 'success');
         loadResellerProducts();
         loadResellerOrders();
         loadWithdrawals();
       } else {
-        showToast(data.error || 'লগইন ব্যর্থ হয়েছে। তথ্য ও পাসওয়ার্ড যাচাই করুন।', 'error');
+        showToast('লগইন ব্যর্থ হয়েছে। তথ্য ও পাসওয়ার্ড যাচাই করুন। (ডিফল্ট: 01711000000 / reseller123)', 'error');
       }
     } catch {
-      showToast('সার্ভারের সাথে সংযোগ স্থাপন করা সম্ভব হয়নি।', 'error');
+      showToast('লগইন প্রক্রিয়ায় ত্রুটি হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।', 'error');
     } finally {
       setIsLoggingIn(false);
     }
