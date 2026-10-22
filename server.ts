@@ -30,9 +30,14 @@ const HOST = cliHost || process.env.HOST || '0.0.0.0';
 const isProd = process.env.NODE_ENV === 'production';
 
 // Ensure uploads folder exists
-const UPLOADS_DIR = path.resolve(process.cwd(), 'uploads');
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+const isVercelRuntime = Boolean(process.env.VERCEL || process.env.NOW_REGION);
+const UPLOADS_DIR = isVercelRuntime ? path.join('/tmp', 'uploads') : path.resolve(process.cwd(), 'uploads');
+try {
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+} catch {
+  // In serverless environments, fail silently
 }
 
 // Middleware

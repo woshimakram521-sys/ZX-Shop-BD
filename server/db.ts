@@ -3,7 +3,10 @@ import path from 'path';
 import crypto from 'crypto';
 import type { DatabaseSchema, Product, Category, Order, DeliveryZone, Coupon, Review, StoreSettings } from '../src/types/ecommerce.ts';
 
-const DB_FILE = path.resolve(process.cwd(), 'data', 'db.json');
+const isVercel = Boolean(process.env.VERCEL || process.env.NOW_REGION);
+const DB_FILE = isVercel
+  ? path.join('/tmp', 'db.json')
+  : path.resolve(process.cwd(), 'data', 'db.json');
 
 function hashPassword(password: string, salt: string): string {
   return crypto.createHmac('sha256', salt).update(password).digest('hex');
@@ -280,8 +283,8 @@ const defaultReviews: Review[] = [
   },
 ];
 
-const DB_BACKUP_FILE = path.resolve(process.cwd(), 'data', 'db.json.bak');
-const DB_BACKUPS_DIR = path.resolve(process.cwd(), 'data', 'backups');
+const DB_BACKUP_FILE = isVercel ? path.join('/tmp', 'db.json.bak') : path.resolve(process.cwd(), 'data', 'db.json.bak');
+const DB_BACKUPS_DIR = isVercel ? path.join('/tmp', 'backups') : path.resolve(process.cwd(), 'data', 'backups');
 
 export class Database {
   private static instance: Database;
@@ -457,12 +460,37 @@ export class Database {
   }
 
   private loadData(): DatabaseSchema {
-    const dir = path.dirname(DB_FILE);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+    try {
+      const dir = path.dirname(DB_FILE);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      if (!fs.existsSync(DB_BACKUPS_DIR)) {
+        fs.mkdirSync(DB_BACKUPS_DIR, { recursive: true });
+      }
+    } catch {
+      // In read-only serverless lambdas, continue safely
     }
-    if (!fs.existsSync(DB_BACKUPS_DIR)) {
-      fs.mkdirSync(DB_BACKUPS_DIR, { recursive: true });
+
+    // 0. Seed /tmp on Vercel from static files if needed
+    if (isVercel && !fs.existsSync(DB_FILE)) {
+      const seedPaths = [
+        path.resolve(process.cwd(), 'data', 'db.json'),
+        path.resolve(process.cwd(), 'public', 'data', 'db.json'),
+      ];
+      for (const sp of seedPaths) {
+        if (fs.existsSync(sp)) {
+          try {
+            const raw = fs.readFileSync(sp, 'utf-8');
+            const parsed = JSON.parse(raw);
+            if (parsed && Array.isArray(parsed.products) && parsed.products.length > 0) {
+              try { fs.writeFileSync(DB_FILE, raw, 'utf-8'); } catch {}
+              console.log(`[Database Vercel] Seeded /tmp/db.json with ${parsed.products.length} products`);
+              return parsed;
+            }
+          } catch {}
+        }
+      }
     }
 
     // 1. Primary load attempt from DB_FILE
