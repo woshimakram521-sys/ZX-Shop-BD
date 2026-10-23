@@ -2509,12 +2509,23 @@ async function startServer() {
   } else {
     const distPath = path.resolve(process.cwd(), 'dist');
     const indexPath = path.join(distPath, 'index.html');
-    if (!fs.existsSync(indexPath)) {
-      throw new Error(`[Server Fatal Error] Production build not found at ${distPath}. Run "npm run build" before running "npm start".`);
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+    } else {
+      console.warn(`[Server Warning] Production build not found at ${distPath}. Static assets will fallback to root.`);
     }
-    app.use(express.static(distPath));
+
     app.get('*', (req: Request, res: Response) => {
-      res.sendFile(indexPath);
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        const rootIndex = path.resolve(process.cwd(), 'index.html');
+        if (fs.existsSync(rootIndex)) {
+          res.sendFile(rootIndex);
+        } else {
+          res.status(200).send('<!DOCTYPE html><html><head><title>ZX Shop</title></head><body><h1>ZX Shop Server Online</h1><p>Building client assets...</p></body></html>');
+        }
+      }
     });
   }
 

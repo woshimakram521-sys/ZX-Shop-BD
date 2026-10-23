@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import jpeg from 'jpeg-js';
 import { GoogleGenAI } from '@google/genai';
-import { Product, Category } from '../src/types/ecommerce';
+import type { Product, Category } from '../src/types/ecommerce.ts';
 
 interface ImageFingerprint {
   hash: string; // 64-bit dHash string
