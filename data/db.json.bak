@@ -512,21 +512,21 @@
     {
       "id": "zone-1",
       "name": "ঢাকা সিটির ভিতরে",
-      "rate": 60,
+      "rate": 70,
       "estimatedDays": "১–২ দিন",
       "isActive": true
     },
     {
       "id": "zone-2",
-      "name": "ঢাকা সাব-এরিয়া (গাজীপুর/সাভার/কেরানীগঞ্জ)",
-      "rate": 100,
+      "name": "ঢাকা সাব-এরিয়া",
+      "rate": 110,
       "estimatedDays": "২–৩ দিন",
       "isActive": true
     },
     {
       "id": "zone-3",
-      "name": "ঢাকার বাইরে (সমগ্র বাংলাদেশ)",
-      "rate": 130,
+      "name": "ঢাকার বাইরে",
+      "rate": 140,
       "estimatedDays": "৩–৫ দিন",
       "isActive": true
     }
@@ -587,19 +587,19 @@
     }
   ],
   "settings": {
-    "storeName": "ZX Shop – বাংলা ই-কমার্স",
+    "storeName": "ZX Shop - প্রিমিয়াম লাইফস্টাইল 1792746668369",
     "storeTagline": "আপনার পছন্দের প্রিমিয়াম অনলাইন শপ",
     "logoUrl": "",
-    "contactPhone": "+880 1711-234567",
-    "whatsappNumber": "+880 1711-234567",
+    "contactPhone": "01888123456",
+    "whatsappNumber": "01888123456",
     "email": "support@zxshop.com.bd",
     "address": "বাড়ি #১২, রোড #০৫, ধানমন্ডি, ঢাকা-১২০৫, বাংলাদেশ",
-    "bkashNumber": "01711234567",
+    "bkashNumber": "01888123456",
     "bkashType": "Personal",
-    "nagadNumber": "01711234567",
+    "nagadNumber": "01999654321",
     "nagadType": "Personal",
-    "freeDeliveryThreshold": 3000,
-    "announcementNotice": "🎉 সমগ্র বাংলাদেশে হোম ডেলিভারি ও ক্যাশ অন ডেলিভারি সুবিধা! ৩০০০ টাকার অর্ডারে ফ্রি ডেলিভারি!",
+    "freeDeliveryThreshold": 2500,
+    "announcementNotice": "🎉 বিশেষ অফার: ২৫০০ টাকার কেনাকাটায় সারা দেশে ফ্রি ডেলিভারি!",
     "bannerTitle": "আধুনিক লাইফস্টাইল ও প্রিমিয়াম প্রডাক্ট কালেকশন",
     "bannerSubtitle": "১০০% খাঁটি পণ্য, দ্রুততম ডেলিভারি এবং সহজ রিটার্ন সুবিধা নিয়ে ZX Shop রয়েছে আপনার পাশে।",
     "bannerImage": "/src/assets/images/hero_ecommerce_banner_1791605905466.jpg",
@@ -618,12 +618,13 @@
     "smtpHost": "smtp.gmail.com",
     "smtpPort": 465,
     "resellerRegistrationEnabled": true,
-    "resellerRegistrationFee": 200,
+    "resellerRegistrationFee": 300,
     "resellerMinPayoutAmount": 500,
     "resellerRegistrationRegularFee": 1000,
     "resellerRegistrationDiscountedFee": 300,
     "resellerReferralBonus": 100,
-    "resellerOrderDeliveryFee": 100
+    "resellerOrderDeliveryFee": 100,
+    "rocketNumber": "01777000111"
   },
   "adminCredentials": {
     "username": "admin",
@@ -642,7 +643,10 @@
     "723c97ed7c5aef710c4a0b8f117e749f58a3116083e1a14ac4453669c3c71aef",
     "efd6c1de23c3d864ace21627eed0ea01233b959a37461de8d5f57941dd7c22ee",
     "41af5ebe7f70523a379aabcff6c84e3fbf89c7e8f169aa4c324f40baa11455a1",
-    "0cdaa66bd2497885c67eedd2a62edea0086e2e8fb4e2e14e0950d9b3d4b68036"
+    "0cdaa66bd2497885c67eedd2a62edea0086e2e8fb4e2e14e0950d9b3d4b68036",
+    "5203f805291f4a37116d33d1abc4156457353c43468213edd1c349066dde1f3f",
+    "53147611ec398dab149e9575f097cfb96d986ac42d380b791a662bd6022d76d1",
+    "1a1972d54ca5743b102bc032ea1279288a4df6fa9f3c3117c7e060d3a86d0e88"
   ],
   "resellers": [
     {

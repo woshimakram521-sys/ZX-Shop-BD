@@ -232,16 +232,13 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (contentType.includes('application/json')) {
             const data = await res.json();
             if (data && Array.isArray(data.products) && data.products.length > 0) {
-              let mergedSettings = data.settings || fallbackSettings;
+              const serverSettings = data.settings || fallbackSettings;
+              setSettings(serverSettings);
               if (typeof window !== 'undefined') {
                 try {
-                  const custom = localStorage.getItem('zx_custom_settings');
-                  if (custom) {
-                    mergedSettings = { ...mergedSettings, ...JSON.parse(custom) };
-                  }
+                  localStorage.removeItem('zx_custom_settings');
                 } catch {}
               }
-              setSettings(mergedSettings);
               setCategories(data.categories?.length ? data.categories : fallbackCategories);
               setDeliveryZones(data.deliveryZones?.length ? data.deliveryZones : fallbackDeliveryZones);
               setProducts(data.products);

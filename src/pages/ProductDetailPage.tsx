@@ -53,19 +53,26 @@ export const ProductDetailPage: React.FC = () => {
     const cleanSlug = slugOrId.trim();
     let decodedSlug = cleanSlug;
     try {
-      decodedSlug = decodeURIComponent(cleanSlug);
+      decodedSlug = decodeURIComponent(cleanSlug).trim();
     } catch {}
+
+    const cleanLower = cleanSlug.toLowerCase();
+    const decodedLower = decodedSlug.toLowerCase();
 
     return (
       allAvailableProducts.find(
         p =>
           p.id === cleanSlug ||
           p.slug === cleanSlug ||
+          p.id?.toLowerCase() === cleanLower ||
+          p.slug?.toLowerCase() === cleanLower ||
           p.id === decodedSlug ||
           p.slug === decodedSlug ||
-          encodeURIComponent(p.slug) === cleanSlug ||
-          p.sku?.toLowerCase() === cleanSlug.toLowerCase() ||
-          p.sku?.toLowerCase() === decodedSlug.toLowerCase()
+          p.slug?.toLowerCase() === decodedLower ||
+          p.sku?.toLowerCase() === cleanLower ||
+          p.sku?.toLowerCase() === decodedLower ||
+          p.name?.trim().toLowerCase() === decodedLower ||
+          encodeURIComponent(p.slug || '') === cleanSlug
       ) || null
     );
   };

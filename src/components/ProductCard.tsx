@@ -22,7 +22,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const inCartItem = cart.find(item => item.product.id === product.id);
 
   return (
-    <div className="clay-card p-3 sm:p-4 flex flex-col justify-between group relative overflow-hidden bg-white rounded-2xl sm:rounded-3xl border border-white/90">
+    <div 
+      onClick={() => navigateToProduct(product.slug || product.id)}
+      className="clay-card p-3 sm:p-4 flex flex-col justify-between group relative overflow-hidden bg-white rounded-2xl sm:rounded-3xl border border-white/90 cursor-pointer select-none transition-transform hover:-translate-y-1"
+    >
       {/* Discount badge if applicable (Clay 3D pill) */}
       {hasDiscount && (
         <div className="absolute top-2.5 left-2.5 sm:top-3 sm:left-3 z-10 bg-gradient-to-r from-rose-500 to-rose-600 text-white text-[10px] sm:text-[11px] font-black px-2.5 py-0.5 rounded-full shadow-[2px_3px_8px_rgba(244,63,94,0.35)] border border-rose-400/40">
@@ -39,8 +42,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
       {/* Image Container with Fallback & Tactile Frame (Preserves natural aspect ratio with object-contain) */}
       <div
-        onClick={() => navigateToProduct(product.slug || product.id)}
-        className="w-full aspect-square rounded-xl sm:rounded-2xl overflow-hidden bg-[#f8fafc] relative cursor-pointer mb-2.5 sm:mb-3 flex items-center justify-center p-2.5 sm:p-3 shadow-[inset_1px_1px_3px_rgba(160,175,200,0.12)] border border-slate-100/80"
+        className="w-full aspect-square rounded-xl sm:rounded-2xl overflow-hidden bg-[#f8fafc] relative mb-2.5 sm:mb-3 flex items-center justify-center p-2.5 sm:p-3 shadow-[inset_1px_1px_3px_rgba(160,175,200,0.12)] border border-slate-100/80"
       >
         <img
           src={getProductImageUrl(product.mainImage || product.images?.[0])}
@@ -50,7 +52,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           className="max-h-full max-w-full w-auto h-auto object-contain transition-transform duration-300 group-hover:scale-105"
           onError={handleImageError}
         />
-        <div className="absolute inset-0 bg-slate-900/15 backdrop-blur-[1px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl sm:rounded-2xl">
+        <div className="absolute inset-0 bg-slate-900/15 backdrop-blur-[1px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl sm:rounded-2xl pointer-events-none">
           <span className="clay-btn-secondary px-3.5 py-1.5 text-xs font-bold text-slate-800 flex items-center gap-1.5 shadow-md">
             <Eye className="w-3.5 h-3.5 text-rose-600" /> বিস্তারিত
           </span>
@@ -71,8 +73,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
           {/* Product Title */}
           <h3
-            onClick={() => navigateToProduct(product.slug || product.id)}
-            className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-2 hover:text-rose-600 transition-colors cursor-pointer mb-1.5 leading-snug"
+            className="text-xs sm:text-sm font-bold text-slate-900 line-clamp-2 hover:text-rose-600 transition-colors mb-1.5 leading-snug"
             title={product.name}
           >
             {product.name}
@@ -113,7 +114,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </div>
 
           <button
-            onClick={() => addToCart(product, 1)}
+            onClick={(e) => {
+              e.stopPropagation();
+              addToCart(product, 1);
+            }}
             disabled={isOutOfStock}
             className={`clay-btn-primary px-3 py-1.5 sm:px-3.5 sm:py-2 text-[11px] sm:text-xs font-bold flex items-center gap-1.5 shrink-0 ${
               isOutOfStock ? 'opacity-50 cursor-not-allowed bg-slate-300 shadow-none' : ''

@@ -903,31 +903,31 @@ export const AdminPage: React.FC = () => {
     }
 
     try {
-      try {
-        const res = await authFetch('/api/admin/settings', {
-          method: 'PUT',
-          body: JSON.stringify(updated),
-        });
-        const data = await res.json();
-        if (res.ok && data.success && data.settings) {
-          setSettingsForm(data.settings);
-        }
-      } catch (apiErr) {
-        console.warn('Backend settings update warning, saving locally:', apiErr);
+      const res = await authFetch('/api/admin/settings', {
+        method: 'PUT',
+        body: JSON.stringify(updated),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        const errMsg = data.error || 'রিসেলার সেটিংস সংরক্ষণ ব্যর্থ হয়েছে।';
+        showToast(errMsg, 'error');
+        return;
       }
 
-      setSettingsForm(updated);
+      if (data.settings) {
+        setSettingsForm(data.settings);
+      }
       try {
-        localStorage.setItem('zx_custom_settings', JSON.stringify(updated));
+        localStorage.removeItem('zx_custom_settings');
         const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
-        cached.settings = updated;
+        cached.settings = data.settings || updated;
         localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
       } catch {}
 
-      showToast('রিসেলার ও রেফারেল পলিসি সফলভাবে সংরক্ষিত হয়েছে!', 'success');
+      showToast('রিসেলার ও রেফারেল পলিসি সফলভাবে ডেটাবেসে সংরক্ষিত হয়েছে!', 'success');
       reloadBootstrap();
-    } catch {
-      showToast('রিসেলার সেটিংস সংরক্ষণ ব্যর্থ হয়েছে।', 'error');
+    } catch (err: any) {
+      showToast('সার্ভারে যোগাযোগ ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।', 'error');
     } finally {
       setIsSavingResellerSettings(false);
     }
@@ -1152,32 +1152,33 @@ export const AdminPage: React.FC = () => {
     }
 
     try {
-      try {
-        const res = await authFetch('/api/admin/settings', {
-          method: 'PUT',
-          body: JSON.stringify(cleanSettingsForm),
-        });
-        const data = await res.json();
-        if (res.ok && data.success && data.settings) {
-          setSettingsForm(data.settings);
-        }
-      } catch (apiErr) {
-        console.warn('API /api/admin/settings network warning, saving locally:', apiErr);
+      const res = await authFetch('/api/admin/settings', {
+        method: 'PUT',
+        body: JSON.stringify(cleanSettingsForm),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        const errMsg = data.error || 'সেটিংস সার্ভারে সংরক্ষণ করতে ব্যর্থ হয়েছে।';
+        setSettingsSaveError(errMsg);
+        showToast(errMsg, 'error');
+        return;
       }
 
-      // Persist in localStorage so changes are never lost across reloads
-      setSettingsForm(cleanSettingsForm);
+      setSettingsSaveError(null);
+      if (data.settings) {
+        setSettingsForm(data.settings);
+      }
       try {
-        localStorage.setItem('zx_custom_settings', JSON.stringify(cleanSettingsForm));
+        localStorage.removeItem('zx_custom_settings');
         const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
-        cached.settings = cleanSettingsForm;
+        cached.settings = data.settings || cleanSettingsForm;
         localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
       } catch {}
 
-      showToast('দোকানের সেটিংস সফলভাবে সংরক্ষিত হয়েছে!', 'success');
+      showToast('দোকানের সেটিংস সফলভাবে ডেটাবেসে সংরক্ষিত হয়েছে!', 'success');
       reloadBootstrap();
-    } catch {
-      const netError = 'সেটিংস সংরক্ষণে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।';
+    } catch (err: any) {
+      const netError = 'সার্ভারের সাথে যোগাযোগ ব্যর্থ হয়েছে। অনুগ্রহ করে ইন্টারনেট ও সার্ভার পরীক্ষা করুন।';
       setSettingsSaveError(netError);
       showToast(netError, 'error');
     } finally {

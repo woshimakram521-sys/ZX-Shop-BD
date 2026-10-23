@@ -235,16 +235,23 @@ app.post('/api/search/image', async (req: Request, res: Response) => {
 app.get('/api/products/:slugOrId', (req: Request, res: Response) => {
   const data = dbInstance.getData();
   const { slugOrId } = req.params;
-  const decoded = decodeURIComponent(slugOrId || '').trim();
+  const cleanParam = (slugOrId || '').trim();
+  const decoded = decodeURIComponent(cleanParam).trim();
+  const cleanLower = cleanParam.toLowerCase();
+  const decodedLower = decoded.toLowerCase();
 
   const rawProduct = data.products.find(
     p =>
-      (p.id === slugOrId ||
-        p.slug === slugOrId ||
+      (p.id === cleanParam ||
+        p.slug === cleanParam ||
         p.id === decoded ||
         p.slug === decoded ||
-        p.sku?.toLowerCase() === slugOrId.toLowerCase() ||
-        p.sku?.toLowerCase() === decoded.toLowerCase()) &&
+        p.id?.toLowerCase() === cleanLower ||
+        p.slug?.toLowerCase() === cleanLower ||
+        p.slug?.toLowerCase() === decodedLower ||
+        p.sku?.toLowerCase() === cleanLower ||
+        p.sku?.toLowerCase() === decodedLower ||
+        p.name?.trim().toLowerCase() === decodedLower) &&
       p.isPublished !== false
   );
 
@@ -1223,110 +1230,122 @@ app.put('/api/admin/settings', requireAdmin, (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: 'দোকানের নাম খালি রাখা যাবে না।' });
     }
 
-    // 2. Validate Admin Notification Email
     let adminEmail: string | undefined = undefined;
-    if (body.adminNotificationEmail !== undefined && body.adminNotificationEmail !== null) {
-      const emailStr = String(body.adminNotificationEmail).trim();
-      if (emailStr !== '') {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(emailStr)) {
-          return res.status(400).json({
-            success: false,
-            error: 'অ্যাডমিন নোটিফিকেশন ইমেইলটি সঠিক নয়। অনুগ্রহ করে একটি বৈধ ইমেইল দিন (যেমন: mdmohammad.644633815@gmail.com)।',
-            field: 'adminNotificationEmail',
-          });
-        }
-        adminEmail = emailStr;
-      } else {
-        adminEmail = 'mdmohammad.644633815@gmail.com';
-      }
-    }
-
-    // 3. Validate SMTP User (Gmail address)
     let smtpUser: string | undefined = undefined;
-    if (body.smtpUser !== undefined && body.smtpUser !== null) {
-      const userStr = String(body.smtpUser).trim();
-      if (userStr !== '') {
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(userStr)) {
-          return res.status(400).json({
-            success: false,
-            error: 'প্রেরক Gmail আইডি (SMTP User) একটি সঠিক ইমেইল হতে হবে (যেমন: yourstore@gmail.com)।',
-            field: 'smtpUser',
-          });
-        }
-        smtpUser = userStr;
-      } else {
-        smtpUser = '';
-      }
-    }
-
-    // 4. Validate SMTP Host
     let smtpHost: string | undefined = undefined;
-    if (body.smtpHost !== undefined && body.smtpHost !== null) {
-      const hostStr = String(body.smtpHost).trim();
-      if (hostStr !== '') {
-        const hostRegex = /^[a-zA-Z0-9.-]+$/;
-        if (!hostRegex.test(hostStr)) {
+    let smtpPort: number | undefined = undefined;
+    let finalSmtpPass: string | undefined = data.settings.smtpPass;
+
+    // Decoupled SMTP validation: ONLY validate and alter SMTP configuration if isSmtpUpdate === true
+    if (body.isSmtpUpdate === true) {
+      // Validate Admin Notification Email
+      if (body.adminNotificationEmail !== undefined && body.adminNotificationEmail !== null) {
+        const emailStr = String(body.adminNotificationEmail).trim();
+        if (emailStr !== '') {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(emailStr)) {
+            return res.status(400).json({
+              success: false,
+              error: 'অ্যাডমিন নোটিফিকেশন ইমেইলটি সঠিক নয়। অনুগ্রহ করে একটি বৈধ ইমেইল দিন (যেমন: mdmohammad.644633815@gmail.com)।',
+              field: 'adminNotificationEmail',
+            });
+          }
+          adminEmail = emailStr;
+        } else {
+          adminEmail = 'mdmohammad.644633815@gmail.com';
+        }
+      }
+
+      // Validate SMTP User (Gmail address)
+      if (body.smtpUser !== undefined && body.smtpUser !== null) {
+        const userStr = String(body.smtpUser).trim();
+        if (userStr !== '') {
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!emailRegex.test(userStr)) {
+            return res.status(400).json({
+              success: false,
+              error: 'প্রেরক Gmail আইডি (SMTP User) একটি সঠিক ইমেইল হতে হবে (যেমন: yourstore@gmail.com)।',
+              field: 'smtpUser',
+            });
+          }
+          smtpUser = userStr;
+        } else {
+          smtpUser = '';
+        }
+      }
+
+      // Validate SMTP Host
+      if (body.smtpHost !== undefined && body.smtpHost !== null) {
+        const hostStr = String(body.smtpHost).trim();
+        if (hostStr !== '') {
+          const hostRegex = /^[a-zA-Z0-9.-]+$/;
+          if (!hostRegex.test(hostStr)) {
+            return res.status(400).json({
+              success: false,
+              error: 'SMTP Host এর মান সঠিক নয় (যেমন: smtp.gmail.com)।',
+              field: 'smtpHost',
+            });
+          }
+          smtpHost = hostStr;
+        } else {
+          smtpHost = 'smtp.gmail.com';
+        }
+      }
+
+      // Validate SMTP Port
+      if (body.smtpPort !== undefined && body.smtpPort !== null && body.smtpPort !== '') {
+        const portNum = Number(body.smtpPort);
+        if (isNaN(portNum) || !Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
           return res.status(400).json({
             success: false,
-            error: 'SMTP Host এর মান সঠিক নয় (যেমন: smtp.gmail.com)।',
-            field: 'smtpHost',
+            error: 'SMTP Port ১ থেকে ৬৫৫৩৫ এর মধ্যে একটি বৈধ পূর্ণসংখ্যা হতে হবে (যেমন: 465 বা 587)।',
+            field: 'smtpPort',
           });
         }
-        smtpHost = hostStr;
-      } else {
-        smtpHost = 'smtp.gmail.com';
+        smtpPort = portNum;
+      } else if (body.smtpPort === '') {
+        smtpPort = 465;
       }
-    }
 
-    // 5. Validate SMTP Port
-    let smtpPort: number | undefined = undefined;
-    if (body.smtpPort !== undefined && body.smtpPort !== null && body.smtpPort !== '') {
-      const portNum = Number(body.smtpPort);
-      if (isNaN(portNum) || !Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
+      // Validate & Normalize App Password (smtpPass)
+      if (body.clearSmtpPass === true) {
+        finalSmtpPass = undefined;
+      } else if (typeof body.smtpPass === 'string' && body.smtpPass.trim() !== '') {
+        const cleanPass = body.smtpPass.replace(/\s+/g, '');
+        if (cleanPass.length < 8) {
+          return res.status(400).json({
+            success: false,
+            error: 'Google App Password কমপক্ষে ৮ অক্ষরের (সাধারণত ১৬-ডিজিটের) হতে হবে।',
+            field: 'smtpPass',
+          });
+        }
+        finalSmtpPass = cleanPass;
+      }
+
+      // Coherency Check for SMTP update
+      if (smtpUser && !finalSmtpPass && !process.env.SMTP_PASS && !process.env.GMAIL_APP_PASSWORD) {
         return res.status(400).json({
           success: false,
-          error: 'SMTP Port ১ থেকে ৬৫৫৩৫ এর মধ্যে একটি বৈধ পূর্ণসংখ্যা হতে হবে (যেমন: 465 বা 587)।',
-          field: 'smtpPort',
-        });
-      }
-      smtpPort = portNum;
-    } else if (body.smtpPort === '') {
-      smtpPort = 465;
-    }
-
-    // 6. Validate & Normalize App Password (smtpPass)
-    let finalSmtpPass = data.settings.smtpPass;
-    if (body.clearSmtpPass === true) {
-      finalSmtpPass = undefined;
-    } else if (typeof body.smtpPass === 'string' && body.smtpPass.trim() !== '') {
-      // Remove spaces between 4-char groups (e.g. 'xxxx xxxx xxxx xxxx' -> 'xxxxxxxxxxxxxxxx')
-      const cleanPass = body.smtpPass.replace(/\s+/g, '');
-      if (cleanPass.length < 8) {
-        return res.status(400).json({
-          success: false,
-          error: 'Google App Password কমপক্ষে ৮ অক্ষরের (সাধারণত ১৬-ডিজিটের) হতে হবে।',
+          error: 'প্রেরক Gmail আইডির সাথে ১৬-ডিজিটের Google App Password প্রদান করা আবশ্যক।',
           field: 'smtpPass',
         });
       }
-      finalSmtpPass = cleanPass;
+    } else {
+      // For general or reseller settings updates, safely accept optional adminNotificationEmail if valid
+      if (body.adminNotificationEmail && typeof body.adminNotificationEmail === 'string') {
+        const emailStr = body.adminNotificationEmail.trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (emailStr && emailRegex.test(emailStr)) {
+          adminEmail = emailStr;
+        }
+      }
     }
 
-    // 7. Coherency Check: only enforce if explicitly updating SMTP settings
-    if (body.isSmtpUpdate === true && smtpUser && !finalSmtpPass && !process.env.SMTP_PASS && !process.env.GMAIL_APP_PASSWORD) {
-      return res.status(400).json({
-        success: false,
-        error: 'প্রেরক Gmail আইডির সাথে ১৬-ডিজিটের Google App Password প্রদান করা আবশ্যক।',
-        field: 'smtpPass',
-      });
-    }
-
-    // 8. Construct sanitized updated settings
+    // Clean body and prevent accidental SMTP password overwrite
     const cleanBody = { ...body };
-    if (!cleanBody.smtpPass || typeof cleanBody.smtpPass !== 'string' || !cleanBody.smtpPass.trim()) {
-      delete cleanBody.smtpPass;
-    }
+    delete cleanBody.isSmtpUpdate;
+    delete cleanBody.clearSmtpPass;
+    delete cleanBody.smtpPass;
 
     const updatedSettings: StoreSettings = {
       ...data.settings,
@@ -1337,13 +1356,49 @@ app.put('/api/admin/settings', requireAdmin, (req: Request, res: Response) => {
       ...(smtpPort !== undefined ? { smtpPort: smtpPort } : {}),
     };
 
-    if (finalSmtpPass) {
-      updatedSettings.smtpPass = finalSmtpPass;
-    } else if (body.clearSmtpPass === true) {
-      delete updatedSettings.smtpPass;
+    if (body.isSmtpUpdate === true) {
+      if (finalSmtpPass) {
+        updatedSettings.smtpPass = finalSmtpPass;
+      } else if (body.clearSmtpPass === true) {
+        delete updatedSettings.smtpPass;
+      }
+    } else {
+      // Preserve existing smtpPass
+      if (data.settings.smtpPass) {
+        updatedSettings.smtpPass = data.settings.smtpPass;
+      }
+    }
+
+    // Number sanitization
+    if (updatedSettings.freeDeliveryThreshold !== undefined) {
+      updatedSettings.freeDeliveryThreshold = Number(updatedSettings.freeDeliveryThreshold) || 0;
+    }
+    if (updatedSettings.resellerRegistrationFee !== undefined) {
+      updatedSettings.resellerRegistrationFee = Number(updatedSettings.resellerRegistrationFee) || 0;
+    }
+    if (updatedSettings.resellerRegistrationRegularFee !== undefined) {
+      updatedSettings.resellerRegistrationRegularFee = Number(updatedSettings.resellerRegistrationRegularFee) || 1000;
+    }
+    if (updatedSettings.resellerRegistrationDiscountedFee !== undefined) {
+      updatedSettings.resellerRegistrationDiscountedFee = Number(updatedSettings.resellerRegistrationDiscountedFee) || 300;
+    }
+    if (updatedSettings.resellerReferralBonus !== undefined) {
+      updatedSettings.resellerReferralBonus = Number(updatedSettings.resellerReferralBonus) || 100;
+    }
+    if (updatedSettings.resellerMinPayoutAmount !== undefined) {
+      updatedSettings.resellerMinPayoutAmount = Number(updatedSettings.resellerMinPayoutAmount) || 500;
+    }
+    if (updatedSettings.resellerOrderDeliveryFee !== undefined) {
+      updatedSettings.resellerOrderDeliveryFee = Number(updatedSettings.resellerOrderDeliveryFee) || 100;
     }
 
     data.settings = updatedSettings;
+
+    // If delivery zones are passed in payload, persist them too
+    if (Array.isArray(body.deliveryZones)) {
+      data.deliveryZones = body.deliveryZones;
+    }
+
     const saveSuccess = dbInstance.save();
     if (!saveSuccess) {
       return res.status(500).json({
