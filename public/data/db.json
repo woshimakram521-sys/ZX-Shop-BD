@@ -9,7 +9,7 @@
       "description": "উচ্চমানের এমোলেড কার্ভড ডিসপ্লে, হার্টরেট মনিটর, স্লিপ ট্র্যাকিং, ব্লুটুথ কলিং এবং ওয়াটারপ্রুফ বডি। ফুল চার্জে একটানা ৭ দিন পর্যন্ত ব্যাটারি ব্যাকআপ। স্টাইলিশ কালো সিলিকন বেল্ট সহ সম্পূর্ণ বক্স প্যাক।",
       "regularPrice": 2800,
       "salePrice": 2190,
-      "stock": 21,
+      "stock": 22,
       "images": [
         "/src/assets/images/product_smartwatch_black_1791605919110.jpg"
       ],
@@ -368,49 +368,6 @@
   ],
   "orders": [
     {
-      "id": "ord-1792850419307-623",
-      "orderNumber": "ZX-9307623",
-      "customer": {
-        "fullName": "টেস্ট কাস্টমার",
-        "phone": "01700112233",
-        "division": "ঢাকা",
-        "district": "ঢাকা",
-        "deliveryArea": "ঢাকা সিটির ভিতরে",
-        "fullAddress": "মিরপুর ১০, ঢাকা",
-        "notes": ""
-      },
-      "items": [
-        {
-          "productId": "prod-1",
-          "name": "ম্যাট ব্ল্যাক প্রিমিয়াম স্মার্টওয়াচ আল্ট্রা (AMOLED ডিসপ্লে)",
-          "sku": "ZX-SW-01",
-          "price": 2190,
-          "quantity": 1,
-          "image": "/src/assets/images/product_smartwatch_black_1791605919110.jpg",
-          "selectedVariants": {},
-          "total": 2190
-        }
-      ],
-      "subtotal": 2190,
-      "discount": 0,
-      "deliveryCharge": 70,
-      "deliveryZoneName": "ঢাকা সিটির ভিতরে",
-      "totalAmount": 2260,
-      "paymentMethod": "cod",
-      "paymentStatus": "pending",
-      "orderStatus": "pending",
-      "createdAt": "2026-10-24T14:00:19.307Z",
-      "updatedAt": "2026-10-24T14:00:19.307Z",
-      "statusHistory": [
-        {
-          "status": "pending",
-          "timestamp": "2026-10-24T14:00:19.307Z",
-          "note": "অর্ডারটি সফলভাবে জমা নেওয়া হয়েছে। খুব শীঘ্রই আমাদের প্রতিনিধি কল দিয়ে নিশ্চিত করবেন।"
-        }
-      ],
-      "emailNotificationStatus": "pending"
-    },
-    {
       "id": "ord-1791643193217-974",
       "orderNumber": "ZX-3217974",
       "customer": {
@@ -636,7 +593,7 @@
     "contactPhone": "+880 1711-234567",
     "whatsappNumber": "+880 1711-234567",
     "email": "support@zxshop.com.bd",
-    "address": "বাড়ি #১২, রোড #০৫, ধানমন্ডি, ঢাকা-১২০৫, বাংলাদেশ",
+    "address": "ধানমন্ডি, ঢাকা",
     "bkashNumber": "01711234567",
     "bkashType": "Personal",
     "nagadNumber": "01711234567",
@@ -691,7 +648,8 @@
     "53147611ec398dab149e9575f097cfb96d986ac42d380b791a662bd6022d76d1",
     "1a1972d54ca5743b102bc032ea1279288a4df6fa9f3c3117c7e060d3a86d0e88",
     "21c6b6fd594e5a58bbd1754955f13bcecce80e7de5b9e4ab1086a38a586be3d6",
-    "f932b9e0d92d100e518f938cc1cada90cfb1bdb853a5990f3bab04611cafb4ba"
+    "f932b9e0d92d100e518f938cc1cada90cfb1bdb853a5990f3bab04611cafb4ba",
+    "afc09ee075f4b273c7a644eb4a7221a8658dbe9c37a86e291c0ef206020a4d26"
   ],
   "resellers": [
     {

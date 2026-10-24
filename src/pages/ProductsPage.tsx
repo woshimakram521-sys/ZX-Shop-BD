@@ -49,7 +49,7 @@ export const ProductsPage: React.FC = () => {
       let loaded = false;
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
         const res = await fetch(`/api/products?${params.toString()}`, { signal: controller.signal });
         clearTimeout(timeoutId);
 

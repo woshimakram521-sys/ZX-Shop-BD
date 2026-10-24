@@ -1347,6 +1347,13 @@ app.put('/api/admin/settings', requireAdmin, (req: Request, res: Response) => {
     delete cleanBody.clearSmtpPass;
     delete cleanBody.smtpPass;
 
+    if (body.isSmtpUpdate !== true) {
+      delete cleanBody.smtpUser;
+      delete cleanBody.smtpHost;
+      delete cleanBody.smtpPort;
+      delete cleanBody.adminNotificationEmail;
+    }
+
     const updatedSettings: StoreSettings = {
       ...data.settings,
       ...cleanBody,

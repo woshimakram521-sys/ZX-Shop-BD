@@ -481,18 +481,24 @@ export class Database {
         path.resolve(process.cwd(), 'data', 'db.json'),
         path.resolve(process.cwd(), 'public', 'data', 'db.json'),
       ];
+      let bestCandidate: { data: DatabaseSchema; count: number; raw: string; source: string } | null = null;
       for (const sp of seedPaths) {
         if (fs.existsSync(sp)) {
           try {
             const raw = fs.readFileSync(sp, 'utf-8');
             const parsed = JSON.parse(raw);
             if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products)) {
-              try { fs.writeFileSync(DB_FILE, raw, 'utf-8'); } catch {}
-              console.log(`[Database Init] Initialized ${DB_FILE} with ${parsed.products.length} products from ${sp}`);
-              return parsed;
+              if (!bestCandidate || parsed.products.length > bestCandidate.count) {
+                bestCandidate = { data: parsed, count: parsed.products.length, raw, source: sp };
+              }
             }
           } catch {}
         }
+      }
+      if (bestCandidate) {
+        try { fs.writeFileSync(DB_FILE, bestCandidate.raw, 'utf-8'); } catch {}
+        console.log(`[Database Init] Initialized ${DB_FILE} with ${bestCandidate.count} products from ${bestCandidate.source}`);
+        return bestCandidate.data;
       }
     }
 
@@ -512,61 +518,47 @@ export class Database {
       }
     }
 
-    // 2. Fallback attempt from DB_BACKUP_FILE
-    if (fs.existsSync(DB_BACKUP_FILE)) {
-      try {
-        console.warn('[Database] Attempting recovery from db.json.bak...');
-        const backupContent = fs.readFileSync(DB_BACKUP_FILE, 'utf-8');
-        const parsed = JSON.parse(backupContent);
-        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products)) {
-          console.log(`[Database RECOVERY] Successfully recovered ${parsed.products.length} products from backup!`);
-          try { fs.writeFileSync(DB_FILE, backupContent, 'utf-8'); } catch {}
-          return parsed;
-        }
-      } catch (err) {
-        console.error('[Database ERROR] Failed to recover from db.json.bak:', err);
-      }
-    }
+    // 2. Safe Recovery: Scan all recovery sources and choose candidate with MAXIMUM valid products
+    const recoveryCandidates: { path: string; label: string }[] = [
+      { path: DB_BACKUP_FILE, label: 'db.json.bak' },
+      { path: path.resolve(process.cwd(), 'data', 'db.json'), label: 'data/db.json' },
+      { path: path.resolve(process.cwd(), 'public', 'data', 'db.json'), label: 'public/data/db.json' },
+    ];
 
-    // 3. Fallback attempt from rolling snapshots in backups directory
     try {
       if (fs.existsSync(DB_BACKUPS_DIR)) {
         const snapshotFiles = fs.readdirSync(DB_BACKUPS_DIR)
           .filter(f => f.startsWith('db_') && f.endsWith('.json'))
           .sort()
           .reverse();
-
         for (const snap of snapshotFiles) {
-          try {
-            const snapPath = path.join(DB_BACKUPS_DIR, snap);
-            const snapContent = fs.readFileSync(snapPath, 'utf-8');
-            const parsed = JSON.parse(snapContent);
-            if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products)) {
-              console.log(`[Database RECOVERY] Recovered from snapshot ${snap}!`);
-              try { fs.writeFileSync(DB_FILE, snapContent, 'utf-8'); } catch {}
-              return parsed;
-            }
-          } catch {
-            // continue checking next snapshot
-          }
+          recoveryCandidates.push({ path: path.join(DB_BACKUPS_DIR, snap), label: `snapshot:${snap}` });
         }
       }
-    } catch (snapErr) {
-      console.error('[Database] Error checking snapshots:', snapErr);
-    }
+    } catch {}
 
-    // 4. Fallback attempt from public/data/db.json (static copy)
-    const publicDbFile = path.resolve(process.cwd(), 'public', 'data', 'db.json');
-    if (fs.existsSync(publicDbFile)) {
+    let bestRecovery: { data: DatabaseSchema; count: number; content: string; source: string } | null = null;
+
+    for (const candidate of recoveryCandidates) {
       try {
-        const publicContent = fs.readFileSync(publicDbFile, 'utf-8');
-        const parsed = JSON.parse(publicContent);
-        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products)) {
-          console.log('[Database RECOVERY] Successfully recovered from public/data/db.json mirror!');
-          try { fs.writeFileSync(DB_FILE, publicContent, 'utf-8'); } catch {}
-          return parsed;
+        if (fs.existsSync(candidate.path)) {
+          const content = fs.readFileSync(candidate.path, 'utf-8');
+          const parsed = JSON.parse(content);
+          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products)) {
+            const currentCount = parsed.products.length;
+            if (!bestRecovery || currentCount > bestRecovery.count) {
+              bestRecovery = { data: parsed, count: currentCount, content, source: candidate.label };
+            }
+          }
         }
       } catch {}
+    }
+
+    if (bestRecovery !== null) {
+      const recovered: { data: DatabaseSchema; count: number; content: string; source: string } = bestRecovery;
+      console.log(`[Database RECOVERY] Safely recovered ${recovered.count} products from ${recovered.source} (prevented smaller/older backup overwrite)!`);
+      try { fs.writeFileSync(DB_FILE, recovered.content, 'utf-8'); } catch {}
+      return recovered.data;
     }
 
     // 4. Default initialization ONLY if absolutely no valid database or backup exists

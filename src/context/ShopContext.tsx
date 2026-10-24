@@ -217,11 +217,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } catch {}
       }
 
-      // 2. Fetch from /api/bootstrap with a 3.5s timeout
+      // 2. Fetch from /api/bootstrap with a 10s timeout
       let loaded = false;
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
         const res = await fetch('/api/bootstrap', { signal: controller.signal });
         clearTimeout(timeoutId);
 
@@ -263,8 +263,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // API offline or static hosting
       }
 
-      // 3. Fallback: If /api/bootstrap was unavailable (e.g. static Vercel deployment), fetch /data/db.json directly
-      if (!loaded) {
+      // 3. Fallback: ONLY if /api/bootstrap was unavailable and no products exist in state
+      if (!loaded && (!products || products.length === 0)) {
         try {
           const staticRes = await fetch('/data/db.json');
           if (staticRes.ok) {
