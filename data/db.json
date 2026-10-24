@@ -30,7 +30,7 @@
       "rating": 4.9,
       "reviewCount": 38,
       "createdAt": "2026-10-10T04:23:54.509Z",
-      "updatedAt": "2026-10-13T14:03:01.523Z",
+      "updatedAt": "2026-10-24T14:00:19.307Z",
       "shopPrice": 2190,
       "resellerPrice": 1708,
       "showInShop": true,
@@ -646,7 +646,9 @@
     "0cdaa66bd2497885c67eedd2a62edea0086e2e8fb4e2e14e0950d9b3d4b68036",
     "5203f805291f4a37116d33d1abc4156457353c43468213edd1c349066dde1f3f",
     "53147611ec398dab149e9575f097cfb96d986ac42d380b791a662bd6022d76d1",
-    "1a1972d54ca5743b102bc032ea1279288a4df6fa9f3c3117c7e060d3a86d0e88"
+    "1a1972d54ca5743b102bc032ea1279288a4df6fa9f3c3117c7e060d3a86d0e88",
+    "21c6b6fd594e5a58bbd1754955f13bcecce80e7de5b9e4ab1086a38a586be3d6",
+    "f932b9e0d92d100e518f938cc1cada90cfb1bdb853a5990f3bab04611cafb4ba"
   ],
   "resellers": [
     {

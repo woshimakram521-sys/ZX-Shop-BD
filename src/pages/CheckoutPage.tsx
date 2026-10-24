@@ -168,6 +168,12 @@ export const CheckoutPage: React.FC = () => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
           }
+        } else {
+          const errData = await res.json().catch(() => null);
+          const errMsg = errData?.error || 'অর্ডার প্রক্রিয়া করা যায়নি। তথ্যে ভুল আছে।';
+          setErrorMessage(errMsg);
+          showToast(errMsg, 'error');
+          return;
         }
       } catch (err) {
         console.warn('API /api/orders failed, using client order fallback:', err);

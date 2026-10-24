@@ -46,7 +46,8 @@ export const ProductDetailPage: React.FC = () => {
       ? decodeURIComponent(window.location.pathname.replace('/product/', '').split('/')[0].trim())
       : null);
 
-  const allAvailableProducts = [...(shopProducts || []), ...fallbackProducts];
+  // Single reliable source of truth: prioritize active shop products from database
+  const allAvailableProducts = shopProducts && shopProducts.length > 0 ? shopProducts : [];
 
   const findMatchingProduct = (slugOrId: string | null): Product | null => {
     if (!slugOrId) return null;

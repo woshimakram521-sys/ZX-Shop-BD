@@ -41,13 +41,77 @@ export const OrderTrackingPage: React.FC = () => {
         }),
       });
 
-      const data = await res.json();
-      if (res.ok) {
+      const data = await res.json().catch(() => null);
+      if (res.ok && data) {
         setTrackedOrder(data);
       } else {
-        setErrorMsg(data.error || 'অর্ডারটি খুঁজে পাওয়া যায়নি। সঠিক তথ্য দিয়ে আবার চেষ্টা করুন।');
+        try {
+          const localOrders = JSON.parse(localStorage.getItem('local_customer_orders') || '[]');
+          const cleanNum = orderNumber.trim().toUpperCase();
+          const cleanPhone = phone.replace(/[^0-9]/g, '');
+          const localMatch = localOrders.find((o: any) =>
+            (o.orderNumber?.toUpperCase() === cleanNum || o.id === orderNumber.trim()) &&
+            (o.customer?.phone === cleanPhone || o.customer?.phone?.endsWith(cleanPhone) || cleanPhone.endsWith(o.customer?.phone))
+          );
+          if (localMatch) {
+            setTrackedOrder({
+              orderNumber: localMatch.orderNumber,
+              orderStatus: localMatch.status || 'pending',
+              paymentMethod: localMatch.paymentMethod,
+              paymentStatus: localMatch.paymentStatus,
+              createdAt: localMatch.createdAt,
+              statusHistory: localMatch.statusHistory || [
+                {
+                  status: 'pending',
+                  timestamp: localMatch.createdAt,
+                  note: 'অর্ডারটি সফলভাবে জমা নেওয়া হয়েছে।',
+                },
+              ],
+              totalAmount: localMatch.totalAmount,
+              deliveryZoneName: localMatch.deliveryZoneName,
+              items: localMatch.items || [],
+              maskedPhone: cleanPhone.slice(0, 3) + '*****' + cleanPhone.slice(-3),
+              deliveryArea: localMatch.customer?.deliveryArea,
+            });
+            return;
+          }
+        } catch {}
+
+        setErrorMsg(data?.error || 'অর্ডারটি খুঁজে পাওয়া যায়নি। সঠিক তথ্য দিয়ে আবার চেষ্টা করুন।');
       }
     } catch {
+      try {
+        const localOrders = JSON.parse(localStorage.getItem('local_customer_orders') || '[]');
+        const cleanNum = orderNumber.trim().toUpperCase();
+        const cleanPhone = phone.replace(/[^0-9]/g, '');
+        const localMatch = localOrders.find((o: any) =>
+          (o.orderNumber?.toUpperCase() === cleanNum || o.id === orderNumber.trim()) &&
+          (o.customer?.phone === cleanPhone || o.customer?.phone?.endsWith(cleanPhone) || cleanPhone.endsWith(o.customer?.phone))
+        );
+        if (localMatch) {
+          setTrackedOrder({
+            orderNumber: localMatch.orderNumber,
+            orderStatus: localMatch.status || 'pending',
+            paymentMethod: localMatch.paymentMethod,
+            paymentStatus: localMatch.paymentStatus,
+            createdAt: localMatch.createdAt,
+            statusHistory: localMatch.statusHistory || [
+              {
+                status: 'pending',
+                timestamp: localMatch.createdAt,
+                note: 'অর্ডারটি সফলভাবে জমা নেওয়া হয়েছে।',
+              },
+            ],
+            totalAmount: localMatch.totalAmount,
+            deliveryZoneName: localMatch.deliveryZoneName,
+            items: localMatch.items || [],
+            maskedPhone: cleanPhone.slice(0, 3) + '*****' + cleanPhone.slice(-3),
+            deliveryArea: localMatch.customer?.deliveryArea,
+          });
+          return;
+        }
+      } catch {}
+
       setErrorMsg('সার্ভার যোগাযোগে সমস্যা হয়েছে। আবার চেষ্টা করুন।');
     } finally {
       setIsLoading(false);

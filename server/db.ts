@@ -4,9 +4,12 @@ import crypto from 'crypto';
 import type { DatabaseSchema, Product, Category, Order, DeliveryZone, Coupon, Review, StoreSettings } from '../src/types/ecommerce.ts';
 
 const isVercel = Boolean(process.env.VERCEL || process.env.NOW_REGION);
-const DB_FILE = isVercel
-  ? path.join('/tmp', 'db.json')
-  : path.resolve(process.cwd(), 'data', 'db.json');
+const customDbPath = process.env.DB_FILE_PATH || (process.env.DATA_DIR ? path.join(path.resolve(process.env.DATA_DIR), 'db.json') : null);
+const DB_FILE = customDbPath
+  ? path.resolve(customDbPath)
+  : isVercel
+    ? path.join('/tmp', 'db.json')
+    : path.resolve(process.cwd(), 'data', 'db.json');
 
 function hashPassword(password: string, salt: string): string {
   return crypto.createHmac('sha256', salt).update(password).digest('hex');
@@ -283,8 +286,8 @@ const defaultReviews: Review[] = [
   },
 ];
 
-const DB_BACKUP_FILE = isVercel ? path.join('/tmp', 'db.json.bak') : path.resolve(process.cwd(), 'data', 'db.json.bak');
-const DB_BACKUPS_DIR = isVercel ? path.join('/tmp', 'backups') : path.resolve(process.cwd(), 'data', 'backups');
+const DB_BACKUP_FILE = path.join(path.dirname(DB_FILE), 'db.json.bak');
+const DB_BACKUPS_DIR = path.join(path.dirname(DB_FILE), 'backups');
 
 export class Database {
   private static instance: Database;
@@ -472,8 +475,8 @@ export class Database {
       // In read-only serverless lambdas, continue safely
     }
 
-    // 0. Seed /tmp on Vercel from static files if needed
-    if (isVercel && !fs.existsSync(DB_FILE)) {
+    // 0. Seed DB_FILE from repo files if it does not exist yet (Vercel /tmp or persistent volume on first mount)
+    if (!fs.existsSync(DB_FILE)) {
       const seedPaths = [
         path.resolve(process.cwd(), 'data', 'db.json'),
         path.resolve(process.cwd(), 'public', 'data', 'db.json'),
@@ -483,9 +486,9 @@ export class Database {
           try {
             const raw = fs.readFileSync(sp, 'utf-8');
             const parsed = JSON.parse(raw);
-            if (parsed && Array.isArray(parsed.products) && parsed.products.length > 0) {
+            if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products)) {
               try { fs.writeFileSync(DB_FILE, raw, 'utf-8'); } catch {}
-              console.log(`[Database Vercel] Seeded /tmp/db.json with ${parsed.products.length} products`);
+              console.log(`[Database Init] Initialized ${DB_FILE} with ${parsed.products.length} products from ${sp}`);
               return parsed;
             }
           } catch {}
@@ -517,7 +520,7 @@ export class Database {
         const parsed = JSON.parse(backupContent);
         if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products)) {
           console.log(`[Database RECOVERY] Successfully recovered ${parsed.products.length} products from backup!`);
-          fs.writeFileSync(DB_FILE, backupContent, 'utf-8');
+          try { fs.writeFileSync(DB_FILE, backupContent, 'utf-8'); } catch {}
           return parsed;
         }
       } catch (err) {
@@ -525,7 +528,7 @@ export class Database {
       }
     }
 
-    // 3. Fallback attempt from rolling snapshots in data/backups/
+    // 3. Fallback attempt from rolling snapshots in backups directory
     try {
       if (fs.existsSync(DB_BACKUPS_DIR)) {
         const snapshotFiles = fs.readdirSync(DB_BACKUPS_DIR)
@@ -538,9 +541,9 @@ export class Database {
             const snapPath = path.join(DB_BACKUPS_DIR, snap);
             const snapContent = fs.readFileSync(snapPath, 'utf-8');
             const parsed = JSON.parse(snapContent);
-            if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products) && parsed.products.length > 0) {
+            if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products)) {
               console.log(`[Database RECOVERY] Recovered from snapshot ${snap}!`);
-              fs.writeFileSync(DB_FILE, snapContent, 'utf-8');
+              try { fs.writeFileSync(DB_FILE, snapContent, 'utf-8'); } catch {}
               return parsed;
             }
           } catch {
@@ -558,23 +561,9 @@ export class Database {
       try {
         const publicContent = fs.readFileSync(publicDbFile, 'utf-8');
         const parsed = JSON.parse(publicContent);
-        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products) && parsed.products.length > 0) {
+        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products)) {
           console.log('[Database RECOVERY] Successfully recovered from public/data/db.json mirror!');
-          fs.writeFileSync(DB_FILE, publicContent, 'utf-8');
-          return parsed;
-        }
-      } catch {}
-    }
-
-    // 5. Fallback attempt from .audit_backups master backup
-    const masterBackupFile = path.resolve(process.cwd(), '.audit_backups', 'db.json.pre_audit.bak');
-    if (fs.existsSync(masterBackupFile)) {
-      try {
-        const auditContent = fs.readFileSync(masterBackupFile, 'utf-8');
-        const parsed = JSON.parse(auditContent);
-        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.products) && parsed.products.length > 0) {
-          console.log('[Database RECOVERY] Successfully recovered from audit backup!');
-          fs.writeFileSync(DB_FILE, auditContent, 'utf-8');
+          try { fs.writeFileSync(DB_FILE, publicContent, 'utf-8'); } catch {}
           return parsed;
         }
       } catch {}
@@ -667,6 +656,15 @@ export class Database {
         }
       } catch {
         fs.writeFileSync(DB_FILE, jsonStr, 'utf-8');
+      }
+
+      // Also sync data/db.json if DB_FILE is at a different location (e.g. /tmp/db.json or persistent volume)
+      const localDataFile = path.resolve(process.cwd(), 'data', 'db.json');
+      if (DB_FILE !== localDataFile) {
+        try {
+          if (!fs.existsSync(path.dirname(localDataFile))) fs.mkdirSync(path.dirname(localDataFile), { recursive: true });
+          fs.writeFileSync(localDataFile, jsonStr, 'utf-8');
+        } catch {}
       }
 
       // Also mirror to public/data if public exists for production static backup

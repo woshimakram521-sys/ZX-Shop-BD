@@ -261,10 +261,21 @@ export const AdminPage: React.FC = () => {
         authFetch('/api/admin/notifications'),
       ]);
 
+      let productsLoaded = false;
       if (statsRes.ok) setStats(await statsRes.json());
       if (prodRes.ok) {
         const prodData = await prodRes.json();
-        setProducts(prodData.products || []);
+        const serverProds = prodData.products || [];
+        setProducts(serverProds);
+        productsLoaded = true;
+        try {
+          const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
+          const shopProds = serverProds.filter((p: any) => p.isPublished && p.showInShop !== false);
+          cached.products = shopProds;
+          cached.featuredProducts = shopProds.filter((p: any) => p.isFeatured);
+          cached.popularProducts = shopProds.filter((p: any) => p.isPopular);
+          localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
+        } catch {}
       }
       if (ordRes.ok) {
         const ordData = await ordRes.json();
@@ -309,8 +320,10 @@ export const AdminPage: React.FC = () => {
         setEmailStatus(await emailRes.json());
       }
 
-      // Safety fallback for static hosting / offline Vercel
-      setProducts(prev => (prev.length > 0 ? prev : fallbackProducts));
+      // Fallback ONLY if server products was completely unreachable
+      if (!productsLoaded) {
+        setProducts(prev => (prev.length > 0 ? prev : fallbackProducts));
+      }
       setCategories(prev => (prev.length > 0 ? prev : fallbackCategories));
       setZones(prev => (prev.length > 0 ? prev : fallbackDeliveryZones));
       setSettingsForm((prev: any) => prev || fallbackSettings);
@@ -680,8 +693,11 @@ export const AdminPage: React.FC = () => {
           'success'
         );
         setIsProductModalOpen(false);
-        loadDashboardData();
-        reloadBootstrap();
+        try {
+          localStorage.removeItem('zx_shop_cache');
+        } catch {}
+        await loadDashboardData();
+        await reloadBootstrap();
       } else {
         showToast(data.error || 'পণ্য সংরক্ষণ করা যায়নি।', 'error');
       }
@@ -850,8 +866,11 @@ export const AdminPage: React.FC = () => {
         setCsvFileName('');
         setCsvParsedRows([]);
         setCsvTotalProductsCount(0);
-        loadDashboardData();
-        reloadBootstrap();
+        try {
+          localStorage.removeItem('zx_shop_cache');
+        } catch {}
+        await loadDashboardData();
+        await reloadBootstrap();
       } else {
         showToast(data.error || 'CSV ইমপোর্ট ব্যর্থ হয়েছে।', 'error');
       }
@@ -987,8 +1006,18 @@ export const AdminPage: React.FC = () => {
       const res = await authFetch(`/api/admin/products/${id}`, { method: 'DELETE' });
       if (res.ok) {
         showToast('পণ্যটি সফলভাবে মুছে ফেলা হয়েছে।', 'success');
-        loadDashboardData();
-        reloadBootstrap();
+        setProducts(prev => prev.filter(p => p.id !== id));
+        try {
+          const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
+          if (Array.isArray(cached.products)) {
+            cached.products = cached.products.filter((p: any) => p.id !== id);
+            cached.featuredProducts = (cached.featuredProducts || []).filter((p: any) => p.id !== id);
+            cached.popularProducts = (cached.popularProducts || []).filter((p: any) => p.id !== id);
+            localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
+          }
+        } catch {}
+        await loadDashboardData();
+        await reloadBootstrap();
       }
     } catch {
       showToast('পণ্যটি মুছতে ব্যর্থ হয়েছে।', 'error');
@@ -1001,8 +1030,11 @@ export const AdminPage: React.FC = () => {
       const res = await authFetch(`/api/admin/products/duplicate/${id}`, { method: 'POST' });
       if (res.ok) {
         showToast('পণ্যটির ডুপ্লিকেট কপি তৈরি হয়েছে!', 'success');
-        loadDashboardData();
-        reloadBootstrap();
+        try {
+          localStorage.removeItem('zx_shop_cache');
+        } catch {}
+        await loadDashboardData();
+        await reloadBootstrap();
       }
     } catch {
       showToast('পণ্য কপি করতে ব্যর্থ হয়েছে।', 'error');
@@ -1018,8 +1050,11 @@ export const AdminPage: React.FC = () => {
       });
       if (res.ok) {
         showToast(prod.isPublished ? 'পণ্যটি Unpublish করা হয়েছে।' : 'পণ্যটি Publish করা হয়েছে!', 'info');
-        loadDashboardData();
-        reloadBootstrap();
+        try {
+          localStorage.removeItem('zx_shop_cache');
+        } catch {}
+        await loadDashboardData();
+        await reloadBootstrap();
       }
     } catch {
       showToast('স্ট্যাটাস পরিবর্তন ব্যর্থ হয়েছে।', 'error');
@@ -1040,9 +1075,25 @@ export const AdminPage: React.FC = () => {
       });
       if (res.ok) {
         showToast('বাল্ক অ্যাকশন সফল হয়েছে!', 'success');
+        if (action === 'delete') {
+          setProducts(prev => prev.filter(p => !selectedProductIds.includes(p.id)));
+          try {
+            const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
+            if (Array.isArray(cached.products)) {
+              cached.products = cached.products.filter((p: any) => !selectedProductIds.includes(p.id));
+              cached.featuredProducts = (cached.featuredProducts || []).filter((p: any) => !selectedProductIds.includes(p.id));
+              cached.popularProducts = (cached.popularProducts || []).filter((p: any) => !selectedProductIds.includes(p.id));
+              localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
+            }
+          } catch {}
+        } else {
+          try {
+            localStorage.removeItem('zx_shop_cache');
+          } catch {}
+        }
         setSelectedProductIds([]);
-        loadDashboardData();
-        reloadBootstrap();
+        await loadDashboardData();
+        await reloadBootstrap();
       }
     } catch {
       showToast('অপারেশন ব্যর্থ হয়েছে।', 'error');

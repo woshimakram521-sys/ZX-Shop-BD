@@ -327,18 +327,16 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
       if (res.ok) {
         const data = await res.json();
         const prods: Product[] = data.products || [];
-        if (prods.length > 0) {
-          setResellerProducts(prods);
+        setResellerProducts(prods);
 
-          // Pre-fill custom prices with recommended Shop Price
-          const initialPrices: Record<string, number> = {};
-          prods.forEach(p => {
-            const defaultShopPrice = p.shopPrice ?? (p.salePrice ?? p.regularPrice);
-            initialPrices[p.id] = defaultShopPrice;
-          });
-          setCustomPrices(initialPrices);
-          loaded = true;
-        }
+        // Pre-fill custom prices with recommended Shop Price
+        const initialPrices: Record<string, number> = {};
+        prods.forEach(p => {
+          const defaultShopPrice = p.shopPrice ?? (p.salePrice ?? p.regularPrice);
+          initialPrices[p.id] = defaultShopPrice;
+        });
+        setCustomPrices(initialPrices);
+        loaded = true;
       }
     } catch {
       // API unreachable

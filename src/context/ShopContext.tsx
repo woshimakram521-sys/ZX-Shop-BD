@@ -151,9 +151,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const route = parseRouteFromUrl();
       setCurrentViewState(route.view);
       setSelectedProductSlug(route.productSlug);
-      if (route.categorySlug) {
-        setSelectedCategorySlug(route.categorySlug);
-      }
+      setSelectedCategorySlug(route.categorySlug || null);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
@@ -231,7 +229,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const contentType = res.headers.get('content-type') || '';
           if (contentType.includes('application/json')) {
             const data = await res.json();
-            if (data && Array.isArray(data.products) && data.products.length > 0) {
+            if (data && typeof data === 'object' && Array.isArray(data.products)) {
               const serverSettings = data.settings || fallbackSettings;
               setSettings(serverSettings);
               if (typeof window !== 'undefined') {
@@ -253,8 +251,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     categories: data.categories,
                     deliveryZones: data.deliveryZones,
                     products: data.products,
-                    featuredProducts: data.featuredProducts,
-                    popularProducts: data.popularProducts,
+                    featuredProducts: data.featuredProducts || data.products.filter((p: any) => p.isFeatured),
+                    popularProducts: data.popularProducts || data.products.filter((p: any) => p.isPopular),
                   }));
                 } catch {}
               }
