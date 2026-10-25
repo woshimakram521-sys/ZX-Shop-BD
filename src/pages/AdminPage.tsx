@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useShop } from '../context/ShopContext';
 import { Product, Order, Category, DeliveryZone, Coupon, OrderStatus, PaymentStatus, Reseller, ResellerStatus, AdminNotification } from '../types/ecommerce';
-import { handleImageError, getProductImageUrl, FALLBACK_PRODUCT_IMAGE } from '../utils/imageUtils';
+import { handleImageError, getProductImageUrl, FALLBACK_PRODUCT_IMAGE, compressImageFile } from '../utils/imageUtils';
 import { fallbackCategories, fallbackDeliveryZones, fallbackSettings, fallbackProducts } from '../data/fallbackData';
 import {
   LayoutDashboard,
@@ -494,7 +494,7 @@ export const AdminPage: React.FC = () => {
     }
   }, [token, activeTab]);
 
-  // Multiple Image Upload Handler (Camera & Gallery friendly)
+  // Multiple Image Upload Handler (Camera & Gallery friendly, auto-compressed, fail-safe)
   const handleMultipleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
@@ -505,38 +505,62 @@ export const AdminPage: React.FC = () => {
     try {
       let uploadCount = 0;
       for (const file of fileList) {
-        const reader = new FileReader();
-        await new Promise((resolve) => {
-          reader.onload = async () => {
-            try {
-              const base64 = reader.result as string;
-              const res = await fetch('/api/upload', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename: file.name, base64 }),
-              });
+        try {
+          // 1. Client-side compression (resizes smartphone camera 15MB photos down to ~150KB in milliseconds)
+          let optimizedDataUrl = '';
+          try {
+            optimizedDataUrl = await compressImageFile(file);
+          } catch {
+            optimizedDataUrl = '';
+          }
+
+          if (!optimizedDataUrl) {
+            // Fallback to FileReader if canvas compression fails
+            optimizedDataUrl = await new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve((reader.result as string) || '');
+              reader.onerror = () => resolve('');
+              reader.readAsDataURL(file);
+            });
+          }
+
+          if (!optimizedDataUrl) continue;
+
+          let targetUrl = optimizedDataUrl;
+
+          // 2. Attempt server storage upload
+          try {
+            const res = await fetch('/api/upload', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ filename: file.name, base64: optimizedDataUrl }),
+            });
+            if (res.ok) {
               const data = await res.json();
-              if (res.ok && data.url) {
-                setFormImages(prev => {
-                  const updated = [...prev, data.url];
-                  setFormMainImage(curr => (curr ? curr : data.url));
-                  return updated;
-                });
-                uploadCount++;
+              if (data && data.url) {
+                targetUrl = data.url;
               }
-            } catch (err) {
-              console.error('File upload failed:', err);
             }
-            resolve(true);
-          };
-          reader.readAsDataURL(file);
-        });
+          } catch (uploadErr) {
+            console.warn('[Image Upload] Server upload bypassed, using optimized inline data:', uploadErr);
+          }
+
+          // 3. Immediately set into product form images
+          setFormImages(prev => {
+            const updated = [...prev, targetUrl];
+            setFormMainImage(curr => (curr ? curr : targetUrl));
+            return updated;
+          });
+          uploadCount++;
+        } catch (err) {
+          console.error('File process failed:', err);
+        }
       }
 
       if (uploadCount > 0) {
-        showToast(`${uploadCount} টি ছবি সফলভাবে আপলোড হয়েছে!`, 'success');
+        showToast(`${uploadCount} টি ছবি সফলভাবে যুক্ত হয়েছে!`, 'success');
       } else {
-        showToast('ছবি আপলোড সম্পন্ন হয়নি।', 'error');
+        showToast('ছবি যুক্ত করা সম্ভব হয়নি। অন্য ছবি চেষ্টা করুন।', 'error');
       }
     } catch {
       showToast('ছবি প্রক্রিয়া করতে ব্যর্থ হয়েছে।', 'error');
@@ -621,8 +645,12 @@ export const AdminPage: React.FC = () => {
       showToast('অনুগ্রহ করে পণ্যের নাম লিখুন।', 'error');
       return;
     }
-    if (!formRegularPrice || isNaN(Number(formRegularPrice)) || Number(formRegularPrice) <= 0) {
-      showToast('অনুগ্রহ করে পণ্যের সঠিক নিয়মিত মূল্য (৳) দিন।', 'error');
+
+    const effectiveShopPrice = Number(formShopPrice || formRegularPrice || 0);
+    const effectiveRegPrice = Number(formRegularPrice || formShopPrice || 0);
+
+    if (effectiveShopPrice <= 0 && effectiveRegPrice <= 0) {
+      showToast('অনুগ্রহ করে পণ্যের সঠিক মূল্য (৳) লিখুন।', 'error');
       return;
     }
 
@@ -644,15 +672,18 @@ export const AdminPage: React.FC = () => {
 
     const mainImg = formMainImage || (formImages.length > 0 ? formImages[0] : FALLBACK_PRODUCT_IMAGE);
 
-    const regPrice = Number(formRegularPrice);
-    const sPrice = formSalePrice ? Number(formSalePrice) : undefined;
-    const shPrice = formShopPrice ? Number(formShopPrice) : (sPrice ?? regPrice);
-    const resPrice = formResellerPrice ? Number(formResellerPrice) : Math.round(shPrice * 0.78);
+    const regPrice = effectiveRegPrice > 0 ? effectiveRegPrice : effectiveShopPrice;
+    const sPrice = formSalePrice && Number(formSalePrice) > 0 ? Number(formSalePrice) : undefined;
+    const shPrice = effectiveShopPrice > 0 ? effectiveShopPrice : (sPrice ?? regPrice);
+    const resPrice = formResellerPrice && Number(formResellerPrice) > 0
+      ? Number(formResellerPrice)
+      : Math.round(shPrice * 0.78);
+    const stockCount = formStock && !isNaN(Number(formStock)) ? Math.max(0, Number(formStock)) : 20;
 
     const payload = {
       name: formName.trim(),
-      sku: formSku.trim(),
-      category: formCategory,
+      sku: formSku.trim() || `ZX-${Math.floor(1000 + Math.random() * 9000)}`,
+      category: formCategory || 'cat-1',
       description: formDesc.trim(),
       regularPrice: regPrice,
       salePrice: sPrice,
@@ -661,7 +692,7 @@ export const AdminPage: React.FC = () => {
       showInShop: formShowInShop,
       showInReseller: formShowInReseller,
       allowDropship: formAllowDropship,
-      stock: Number(formStock) || 0,
+      stock: stockCount,
       mainImage: mainImg,
       images: formImages.length ? formImages : [mainImg],
       variants: parsedVariants,
@@ -699,10 +730,11 @@ export const AdminPage: React.FC = () => {
         await loadDashboardData();
         await reloadBootstrap();
       } else {
-        showToast(data.error || 'পণ্য সংরক্ষণ করা যায়নি।', 'error');
+        showToast(data?.error || 'পণ্য সংরক্ষণ করা যায়নি।', 'error');
       }
-    } catch {
-      showToast('সার্ভার সমস্যা, আবার চেষ্টা করুন।', 'error');
+    } catch (err: any) {
+      console.error('Save product error:', err);
+      showToast(err?.message || 'সার্ভার সমস্যা, আবার চেষ্টা করুন।', 'error');
     }
   };
 
@@ -1189,7 +1221,7 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  // Update General Store Settings
+  // Update General Store Settings (Saves general & SMTP together)
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!settingsForm) return;
@@ -1197,7 +1229,10 @@ export const AdminPage: React.FC = () => {
     setIsSavingSettings(true);
     setSettingsSaveError(null);
 
-    const cleanSettingsForm = { ...settingsForm };
+    const cleanSettingsForm: any = { ...settingsForm };
+    if (cleanSettingsForm.smtpPass) {
+      cleanSettingsForm.smtpPass = String(cleanSettingsForm.smtpPass).replace(/\s+/g, '');
+    }
     if (!cleanSettingsForm.smtpPass || !String(cleanSettingsForm.smtpPass).trim()) {
       delete cleanSettingsForm.smtpPass;
     }
@@ -1209,7 +1244,7 @@ export const AdminPage: React.FC = () => {
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
-        const errMsg = data.error || 'সেটিংস সার্ভারে সংরক্ষণ করতে ব্যর্থ হয়েছে।';
+        const errMsg = data?.error || 'সেটিংস সার্ভারে সংরক্ষণ করতে ব্যর্থ হয়েছে।';
         setSettingsSaveError(errMsg);
         showToast(errMsg, 'error');
         return;
@@ -1226,10 +1261,17 @@ export const AdminPage: React.FC = () => {
         localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
       } catch {}
 
-      showToast('দোকানের সেটিংস সফলভাবে ডেটাবেসে সংরক্ষিত হয়েছে!', 'success');
+      showToast('দোকানের সকল সেটিংস সফলভাবে ডেটাবেসে সংরক্ষিত হয়েছে!', 'success');
+      
+      // Instantly refresh email service status
+      try {
+        const st = await authFetch('/api/admin/email-status');
+        if (st.ok) setEmailStatus(await st.json());
+      } catch {}
+
       reloadBootstrap();
     } catch (err: any) {
-      const netError = 'সার্ভারের সাথে যোগাযোগ ব্যর্থ হয়েছে। অনুগ্রহ করে ইন্টারনেট ও সার্ভার পরীক্ষা করুন।';
+      const netError = err?.message || 'সার্ভারের সাথে যোগাযোগ ব্যর্থ হয়েছে। অনুগ্রহ করে ইন্টারনেট ও সার্ভার পরীক্ষা করুন।';
       setSettingsSaveError(netError);
       showToast(netError, 'error');
     } finally {
@@ -1246,7 +1288,7 @@ export const AdminPage: React.FC = () => {
     setSmtpSaveError(null);
     setSmtpSaveSuccess(null);
 
-    const adminEmail = (settingsForm.adminNotificationEmail || '').trim();
+    const adminEmail = (settingsForm.adminNotificationEmail || '').trim().toLowerCase();
     if (adminEmail) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(adminEmail)) {
@@ -1256,7 +1298,7 @@ export const AdminPage: React.FC = () => {
       }
     }
 
-    const smtpUser = (settingsForm.smtpUser || '').trim();
+    const smtpUser = (settingsForm.smtpUser || '').trim().toLowerCase();
     if (smtpUser) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(smtpUser)) {
@@ -1275,16 +1317,10 @@ export const AdminPage: React.FC = () => {
 
     const rawPass = (settingsForm.smtpPass || '').trim();
     const passClean = rawPass.replace(/\s+/g, '');
-    if (rawPass && passClean.length < 8) {
-      setSmtpSaveError('Google App Password কমপক্ষে ৮ অক্ষরের (সাধারণত ১৬-ডিজিটের) হতে হবে।');
-      setIsSavingSmtp(false);
-      return;
-    }
 
     try {
       const payload: any = {
         ...settingsForm,
-        isSmtpUpdate: true,
         adminNotificationEmail: adminEmail || 'mdmohammad.644633815@gmail.com',
         smtpUser: smtpUser,
         smtpHost: (settingsForm.smtpHost || 'smtp.gmail.com').trim(),
@@ -1293,6 +1329,8 @@ export const AdminPage: React.FC = () => {
 
       if (passClean) {
         payload.smtpPass = passClean;
+      } else {
+        delete payload.smtpPass;
       }
 
       const res = await authFetch('/api/admin/settings', {
@@ -1308,15 +1346,20 @@ export const AdminPage: React.FC = () => {
         if (data.settings) setSettingsForm(data.settings);
 
         // Instantly refresh email service status
-        const st = await authFetch('/api/admin/email-status');
-        if (st.ok) setEmailStatus(await st.json());
+        try {
+          const st = await authFetch('/api/admin/email-status');
+          if (st.ok) setEmailStatus(await st.json());
+        } catch {}
+        reloadBootstrap();
       } else {
         const errorMsg = data?.error || 'Gmail SMTP সেটিংস সংরক্ষণ ব্যর্থ হয়েছে।';
         setSmtpSaveError(errorMsg);
         showToast(errorMsg, 'error');
       }
-    } catch {
-      showToast('সার্ভার যোগাযোগে সমস্যা হয়েছে। আবার চেষ্টা করুন।', 'error');
+    } catch (err: any) {
+      const errorMsg = err?.message || 'সার্ভার যোগাযোগে সমস্যা হয়েছে। আবার চেষ্টা করুন।';
+      setSmtpSaveError(errorMsg);
+      showToast(errorMsg, 'error');
     } finally {
       setIsSavingSmtp(false);
     }
@@ -2047,12 +2090,17 @@ export const AdminPage: React.FC = () => {
                     <input
                       type="number"
                       required
-                      value={formShopPrice || formRegularPrice}
+                      value={formShopPrice}
                       onChange={e => {
-                        setFormShopPrice(e.target.value);
-                        if (!formRegularPrice) setFormRegularPrice(e.target.value);
+                        const val = e.target.value;
+                        setFormShopPrice(val);
+                        if (!formRegularPrice) setFormRegularPrice(val);
+                        const n = Number(val);
+                        if (n > 0 && !formResellerPrice) {
+                          setFormResellerPrice(String(Math.round(n * 0.78)));
+                        }
                       }}
-                      placeholder="e.g. 2190"
+                      placeholder="যেমন: 2190"
                       className="w-full clay-inset px-2.5 py-2 text-slate-800 font-bold num-bn"
                     />
                     <span className="text-[9px] text-slate-400">সাধারণ ক্রেতারা এই দামে কিনবে</span>
@@ -2060,17 +2108,16 @@ export const AdminPage: React.FC = () => {
 
                   <div>
                     <label className="font-bold text-emerald-700 block mb-1 text-[11px]">
-                      রিসেলার পাইকারি রেট (৳) *
+                      রিসেলার পাইকারি রেট (৳)
                     </label>
                     <input
                       type="number"
-                      required
                       value={formResellerPrice}
                       onChange={e => setFormResellerPrice(e.target.value)}
-                      placeholder="e.g. 1700"
+                      placeholder="যেমন: 1700 (স্বয়ংক্রিয়)"
                       className="w-full clay-inset px-2.5 py-2 text-emerald-800 font-bold num-bn"
                     />
-                    <span className="text-[9px] text-slate-400">রিসেলারের পাইকারি কেনা খরচ</span>
+                    <span className="text-[9px] text-slate-400">ফাঁকা রাখলে ৭৮% রেট হবে</span>
                   </div>
 
                   <div>
@@ -2080,11 +2127,15 @@ export const AdminPage: React.FC = () => {
                     <input
                       type="number"
                       value={formRegularPrice}
-                      onChange={e => setFormRegularPrice(e.target.value)}
-                      placeholder="e.g. 2800"
+                      onChange={e => {
+                        const val = e.target.value;
+                        setFormRegularPrice(val);
+                        if (!formShopPrice) setFormShopPrice(val);
+                      }}
+                      placeholder="যেমন: 2500"
                       className="w-full clay-inset px-2.5 py-2 text-slate-700 num-bn"
                     />
-                    <span className="text-[9px] text-slate-400">কাটা দাগ দেখাতে</span>
+                    <span className="text-[9px] text-slate-400">কাটা দাগ দেখাতে (ঐচ্ছিক)</span>
                   </div>
 
                   <div>
@@ -3471,11 +3522,11 @@ export const AdminPage: React.FC = () => {
               {/* Status Badge */}
               <div className="flex items-center gap-2 self-start sm:self-auto">
                 <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold flex items-center gap-1.5 ${
-                  emailStatus?.configured
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                  (emailStatus?.configured || (settingsForm?.hasSmtpPass && settingsForm?.smtpUser))
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm'
                     : 'bg-amber-100 text-amber-800 border border-amber-200'
                 }`}>
-                  {emailStatus?.configured ? (
+                  {(emailStatus?.configured || (settingsForm?.hasSmtpPass && settingsForm?.smtpUser)) ? (
                     <>
                       <Check className="w-3.5 h-3.5 text-emerald-600" />
                       <span>SMTP সক্রিয় (Active)</span>

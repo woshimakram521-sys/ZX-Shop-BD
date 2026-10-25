@@ -17,12 +17,16 @@ export function getEffectiveSmtpConfig() {
     // fallback
   }
 
-  const host = (process.env.SMTP_HOST || settings.smtpHost || 'smtp.gmail.com').trim();
-  const port = parseInt(process.env.SMTP_PORT || settings.smtpPort?.toString() || '465', 10);
-  const user = (process.env.SMTP_USER || process.env.GMAIL_USER || settings.smtpUser || '').trim();
-  const rawPass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || settings.smtpPass || '').trim();
+  const rawDbUser = (settings.smtpUser || '').trim();
+  const rawDbPass = (settings.smtpPass || '').trim();
+  const isDbConfigured = Boolean(rawDbUser && rawDbPass);
+
+  const user = isDbConfigured ? rawDbUser : (process.env.SMTP_USER || process.env.GMAIL_USER || rawDbUser || '').trim();
+  const rawPass = isDbConfigured ? rawDbPass : (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || rawDbPass || '').trim();
   const pass = rawPass.replace(/\s+/g, '');
-  const adminEmail = (process.env.ADMIN_EMAIL || settings.adminNotificationEmail || 'mdmohammad.644633815@gmail.com').trim();
+  const host = (settings.smtpHost || process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+  const port = parseInt(settings.smtpPort?.toString() || process.env.SMTP_PORT || '465', 10);
+  const adminEmail = (settings.adminNotificationEmail || process.env.ADMIN_EMAIL || 'mdmohammad.644633815@gmail.com').trim();
 
   return {
     host,
@@ -31,7 +35,7 @@ export function getEffectiveSmtpConfig() {
     pass,
     adminEmail,
     isConfigured: Boolean(user && pass),
-    source: (process.env.SMTP_USER || process.env.GMAIL_USER) ? 'environment_variable' : (settings.smtpUser ? 'admin_settings' : 'none'),
+    source: isDbConfigured ? 'admin_settings' : ((process.env.SMTP_USER || process.env.GMAIL_USER) ? 'environment_variable' : (user ? 'admin_settings' : 'none')),
   };
 }
 

@@ -1,29 +1,31 @@
 {
   "products": [
     {
-      "id": "prod-1792854019686",
-      "slug": "audit-test-product-308",
-      "sku": "ZX-AUDIT-99",
-      "name": "অডিট টেস্ট পণ্য (Audit Test Product)",
+      "id": "prod-1792946374499",
+      "slug": "অটো-ভেরিফাইড-টেস্ট-প্রোডাক্ট-372",
+      "sku": "ZX-1783",
+      "name": "অটো ভেরিফাইড টেস্ট প্রোডাক্ট",
       "category": "cat-1",
-      "description": "অডিট টেস্ট বর্ণনা",
-      "regularPrice": 1200,
-      "shopPrice": 1200,
-      "resellerPrice": 950,
+      "description": "",
+      "regularPrice": 1850,
+      "shopPrice": 1850,
+      "resellerPrice": 1443,
       "showInShop": true,
       "showInReseller": true,
       "allowDropship": true,
-      "stock": 15,
-      "images": [],
-      "mainImage": "",
+      "stock": 20,
+      "images": [
+        "/uploads/img_1792946374496_5180.jpg"
+      ],
+      "mainImage": "/uploads/img_1792946374496_5180.jpg",
       "variants": [],
       "isFeatured": false,
       "isPopular": false,
       "isPublished": true,
       "rating": 5,
       "reviewCount": 0,
-      "createdAt": "2026-10-24T15:00:19.686Z",
-      "updatedAt": "2026-10-24T15:00:19.686Z"
+      "createdAt": "2026-10-25T16:39:34.499Z",
+      "updatedAt": "2026-10-25T16:39:34.499Z"
     },
     {
       "id": "prod-1",
@@ -638,7 +640,7 @@
     "metaTitle": "ZX Shop – আধুনিক ও সম্পূর্ণ বাংলা অনলাইন শপ",
     "metaDescription": "বাংলাদেশের সেরা ই-কমার্স প্ল্যাটফর্ম ZX Shop। পোশাক, কসমেটিকস, ইলেকট্রনিক্স ও গ্যাজেট ঘরে বসে অর্ডার করুন। ক্যাশ অন ডেলিভারি সহজলভ্য।",
     "adminNotificationEmail": "mdmohammad.644633815@gmail.com",
-    "smtpUser": "zxshop.official@gmail.com",
+    "smtpUser": "mdmohammad.644633815@gmail.com",
     "smtpPass": "abcdefghijklmnop",
     "smtpHost": "smtp.gmail.com",
     "smtpPort": 465,
@@ -674,7 +676,9 @@
     "1a1972d54ca5743b102bc032ea1279288a4df6fa9f3c3117c7e060d3a86d0e88",
     "21c6b6fd594e5a58bbd1754955f13bcecce80e7de5b9e4ab1086a38a586be3d6",
     "f932b9e0d92d100e518f938cc1cada90cfb1bdb853a5990f3bab04611cafb4ba",
-    "afc09ee075f4b273c7a644eb4a7221a8658dbe9c37a86e291c0ef206020a4d26"
+    "afc09ee075f4b273c7a644eb4a7221a8658dbe9c37a86e291c0ef206020a4d26",
+    "f4071fef5912126b5fa5212ecdeac48185ea937d21937e89c6f3c10df8897eaf",
+    "3f3acdd6688536ffa6f523d859480f221e174299cb6c6e2755e870b95f49f0e4"
   ],
   "resellers": [
     {

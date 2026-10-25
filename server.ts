@@ -41,8 +41,8 @@ try {
 }
 
 // Middleware
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use('/src/assets', express.static(path.resolve(process.cwd(), 'src/assets')));
 const PUBLIC_DIR = path.resolve(process.cwd(), 'public');
@@ -573,7 +573,7 @@ app.post('/api/reviews', (req: Request, res: Response) => {
   res.status(201).json({ success: true, review: newReview, message: 'আপনার মূল্যবান মতামতের জন্য ধন্যবাদ!' });
 });
 
-// Image Upload Endpoint (stores base64 into uploads/ folder)
+// Image Upload Endpoint (stores base64 into uploads/ folder with inline fallback)
 app.post('/api/upload', (req: Request, res: Response) => {
   try {
     const { filename, base64 } = req.body;
@@ -599,25 +599,34 @@ app.post('/api/upload', (req: Request, res: Response) => {
       buffer = Buffer.from(cleanBase64, 'base64');
     }
 
-    if (!fs.existsSync(UPLOADS_DIR)) {
-      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
-    }
-
-    const safeName = `img_${Date.now()}_${Math.floor(Math.random() * 10000)}.${ext}`;
-    const filePath = path.join(UPLOADS_DIR, safeName);
-    fs.writeFileSync(filePath, buffer);
-
-    // Also mirror to public/uploads if public exists
-    const publicUploads = path.resolve(process.cwd(), 'public', 'uploads');
     try {
-      if (!fs.existsSync(publicUploads)) fs.mkdirSync(publicUploads, { recursive: true });
-      fs.writeFileSync(path.join(publicUploads, safeName), buffer);
-    } catch {}
+      if (!fs.existsSync(UPLOADS_DIR)) {
+        fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+      }
 
-    const fileUrl = `/uploads/${safeName}`;
-    res.json({ success: true, url: fileUrl });
+      const safeName = `img_${Date.now()}_${Math.floor(Math.random() * 10000)}.${ext}`;
+      const filePath = path.join(UPLOADS_DIR, safeName);
+      fs.writeFileSync(filePath, buffer);
+
+      // Also mirror to public/uploads if public exists
+      const publicUploads = path.resolve(process.cwd(), 'public', 'uploads');
+      try {
+        if (!fs.existsSync(publicUploads)) fs.mkdirSync(publicUploads, { recursive: true });
+        fs.writeFileSync(path.join(publicUploads, safeName), buffer);
+      } catch {}
+
+      const fileUrl = `/uploads/${safeName}`;
+      return res.json({ success: true, url: fileUrl });
+    } catch (fsErr) {
+      // In serverless / read-only filesystem environments, gracefully return base64
+      console.warn('Filesystem write failed, returning inline image fallback:', fsErr);
+      return res.json({ success: true, url: cleanBase64, inline: true });
+    }
   } catch (err) {
     console.error('Upload error:', err);
+    if (req.body?.base64 && typeof req.body.base64 === 'string') {
+      return res.json({ success: true, url: req.body.base64, inline: true });
+    }
     res.status(500).json({ error: 'ছবি সংরক্ষণ করতে ব্যর্থ হয়েছে।' });
   }
 });
@@ -712,24 +721,41 @@ app.post('/api/admin/products', requireAdmin, (req: Request, res: Response) => {
     stock, images, mainImage, variants, isFeatured, isPopular, isPublished
   } = req.body;
 
-  if (!name || (regularPrice === undefined && shopPrice === undefined)) {
-    return res.status(400).json({ error: 'পণ্যের নাম ও নিয়মিত/শপ মূল্য আবশ্যক।' });
+  if (!name || typeof name !== 'string' || !name.trim()) {
+    return res.status(400).json({ error: 'পণ্যের নাম আবশ্যক।' });
   }
 
-  const regPrice = Number(regularPrice ?? shopPrice);
-  const sPrice = salePrice ? Number(salePrice) : undefined;
-  const determinedShopPrice = shopPrice !== undefined ? Number(shopPrice) : (sPrice ?? regPrice);
-  const determinedResellerPrice = resellerPrice !== undefined
+  const effectiveShopPrice = shopPrice !== undefined && shopPrice !== null && shopPrice !== '' && !isNaN(Number(shopPrice))
+    ? Number(shopPrice)
+    : (regularPrice !== undefined && regularPrice !== null && regularPrice !== '' && !isNaN(Number(regularPrice)) ? Number(regularPrice) : 0);
+
+  const effectiveRegularPrice = regularPrice !== undefined && regularPrice !== null && regularPrice !== '' && !isNaN(Number(regularPrice))
+    ? Number(regularPrice)
+    : effectiveShopPrice;
+
+  if (effectiveShopPrice <= 0 && effectiveRegularPrice <= 0) {
+    return res.status(400).json({ error: 'পণ্যের শপ বা নিয়মিত মূল্য নির্ধারণ আবশ্যক।' });
+  }
+
+  const regPrice = effectiveRegularPrice > 0 ? effectiveRegularPrice : effectiveShopPrice;
+  const sPrice = salePrice && Number(salePrice) > 0 ? Number(salePrice) : undefined;
+  const determinedShopPrice = effectiveShopPrice > 0 ? effectiveShopPrice : (sPrice ?? regPrice);
+  const determinedResellerPrice = resellerPrice !== undefined && resellerPrice !== null && resellerPrice !== '' && !isNaN(Number(resellerPrice))
     ? Number(resellerPrice)
-    : (costPrice !== undefined ? Number(costPrice) : Math.round(determinedShopPrice * 0.78));
+    : (costPrice !== undefined && costPrice !== null && !isNaN(Number(costPrice)) ? Number(costPrice) : Math.round(determinedShopPrice * 0.78));
 
   if (determinedShopPrice < 0 || determinedResellerPrice < 0) {
     return res.status(400).json({ error: 'মূল্য ঋণাত্মক (নেগেটিভ) হতে পারে না।' });
   }
 
   const data = dbInstance.getData();
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `prod-${Date.now()}`;
+  const slug = name.toLowerCase()
+    .replace(/[^a-z0-9\u0980-\u09FF]+/g, '-')
+    .replace(/(^-|-$)/g, '') || `prod-${Date.now()}`;
   const generatedSku = sku?.trim() || `ZX-${Math.floor(1000 + Math.random() * 9000)}`;
+
+  const finalImages = Array.isArray(images) && images.length ? images : (mainImage ? [mainImage] : []);
+  const finalMainImage = mainImage || (finalImages.length > 0 ? finalImages[0] : '');
 
   const newProduct: Product = {
     id: `prod-${Date.now()}`,
@@ -742,13 +768,13 @@ app.post('/api/admin/products', requireAdmin, (req: Request, res: Response) => {
     salePrice: sPrice,
     shopPrice: determinedShopPrice,
     resellerPrice: determinedResellerPrice,
-    costPrice: costPrice !== undefined ? Number(costPrice) : undefined,
+    costPrice: costPrice !== undefined && costPrice !== null && !isNaN(Number(costPrice)) ? Number(costPrice) : undefined,
     showInShop: showInShop !== false,
     showInReseller: showInReseller !== false,
     allowDropship: allowDropship !== false,
-    stock: Number(stock) || 0,
-    images: Array.isArray(images) && images.length ? images : (mainImage ? [mainImage] : []),
-    mainImage: mainImage || (Array.isArray(images) && images[0]) || '',
+    stock: stock !== undefined && stock !== null && !isNaN(Number(stock)) ? Math.max(0, Number(stock)) : 20,
+    images: finalImages,
+    mainImage: finalMainImage,
     variants: Array.isArray(variants) ? variants : [],
     isFeatured: Boolean(isFeatured),
     isPopular: Boolean(isPopular),
@@ -1236,123 +1262,76 @@ app.put('/api/admin/settings', requireAdmin, (req: Request, res: Response) => {
     let smtpPort: number | undefined = undefined;
     let finalSmtpPass: string | undefined = data.settings.smtpPass;
 
-    // Decoupled SMTP validation: ONLY validate and alter SMTP configuration if isSmtpUpdate === true
-    if (body.isSmtpUpdate === true) {
-      // Validate Admin Notification Email
-      if (body.adminNotificationEmail !== undefined && body.adminNotificationEmail !== null) {
-        const emailStr = String(body.adminNotificationEmail).trim();
-        if (emailStr !== '') {
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(emailStr)) {
-            return res.status(400).json({
-              success: false,
-              error: 'অ্যাডমিন নোটিফিকেশন ইমেইলটি সঠিক নয়। অনুগ্রহ করে একটি বৈধ ইমেইল দিন (যেমন: mdmohammad.644633815@gmail.com)।',
-              field: 'adminNotificationEmail',
-            });
-          }
-          adminEmail = emailStr;
-        } else {
-          adminEmail = 'mdmohammad.644633815@gmail.com';
-        }
-      }
-
-      // Validate SMTP User (Gmail address)
-      if (body.smtpUser !== undefined && body.smtpUser !== null) {
-        const userStr = String(body.smtpUser).trim();
-        if (userStr !== '') {
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(userStr)) {
-            return res.status(400).json({
-              success: false,
-              error: 'প্রেরক Gmail আইডি (SMTP User) একটি সঠিক ইমেইল হতে হবে (যেমন: yourstore@gmail.com)।',
-              field: 'smtpUser',
-            });
-          }
-          smtpUser = userStr;
-        } else {
-          smtpUser = '';
-        }
-      }
-
-      // Validate SMTP Host
-      if (body.smtpHost !== undefined && body.smtpHost !== null) {
-        const hostStr = String(body.smtpHost).trim();
-        if (hostStr !== '') {
-          const hostRegex = /^[a-zA-Z0-9.-]+$/;
-          if (!hostRegex.test(hostStr)) {
-            return res.status(400).json({
-              success: false,
-              error: 'SMTP Host এর মান সঠিক নয় (যেমন: smtp.gmail.com)।',
-              field: 'smtpHost',
-            });
-          }
-          smtpHost = hostStr;
-        } else {
-          smtpHost = 'smtp.gmail.com';
-        }
-      }
-
-      // Validate SMTP Port
-      if (body.smtpPort !== undefined && body.smtpPort !== null && body.smtpPort !== '') {
-        const portNum = Number(body.smtpPort);
-        if (isNaN(portNum) || !Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
-          return res.status(400).json({
-            success: false,
-            error: 'SMTP Port ১ থেকে ৬৫৫৩৫ এর মধ্যে একটি বৈধ পূর্ণসংখ্যা হতে হবে (যেমন: 465 বা 587)।',
-            field: 'smtpPort',
-          });
-        }
-        smtpPort = portNum;
-      } else if (body.smtpPort === '') {
-        smtpPort = 465;
-      }
-
-      // Validate & Normalize App Password (smtpPass)
-      if (body.clearSmtpPass === true) {
-        finalSmtpPass = undefined;
-      } else if (typeof body.smtpPass === 'string' && body.smtpPass.trim() !== '') {
-        const cleanPass = body.smtpPass.replace(/\s+/g, '');
-        if (cleanPass.length < 8) {
-          return res.status(400).json({
-            success: false,
-            error: 'Google App Password কমপক্ষে ৮ অক্ষরের (সাধারণত ১৬-ডিজিটের) হতে হবে।',
-            field: 'smtpPass',
-          });
-        }
-        finalSmtpPass = cleanPass;
-      }
-
-      // Coherency Check for SMTP update
-      if (smtpUser && !finalSmtpPass && !process.env.SMTP_PASS && !process.env.GMAIL_APP_PASSWORD) {
-        return res.status(400).json({
-          success: false,
-          error: 'প্রেরক Gmail আইডির সাথে ১৬-ডিজিটের Google App Password প্রদান করা আবশ্যক।',
-          field: 'smtpPass',
-        });
-      }
-    } else {
-      // For general or reseller settings updates, safely accept optional adminNotificationEmail if valid
-      if (body.adminNotificationEmail && typeof body.adminNotificationEmail === 'string') {
-        const emailStr = body.adminNotificationEmail.trim();
+    // Validate & normalize Admin Notification Email
+    if (body.adminNotificationEmail !== undefined && body.adminNotificationEmail !== null) {
+      const emailStr = String(body.adminNotificationEmail).trim().toLowerCase();
+      if (emailStr !== '') {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (emailStr && emailRegex.test(emailStr)) {
-          adminEmail = emailStr;
+        if (!emailRegex.test(emailStr)) {
+          return res.status(400).json({
+            success: false,
+            error: 'অ্যাডমিন নোটিফিকেশন ইমেইলটি সঠিক নয়। অনুগ্রহ করে একটি বৈধ ইমেইল দিন (যেমন: mdmohammad.644633815@gmail.com)।',
+            field: 'adminNotificationEmail',
+          });
+        }
+        adminEmail = emailStr;
+      } else {
+        adminEmail = 'mdmohammad.644633815@gmail.com';
+      }
+    }
+
+    // Validate & normalize SMTP User (Gmail address)
+    if (body.smtpUser !== undefined && body.smtpUser !== null) {
+      const userStr = String(body.smtpUser).trim().toLowerCase();
+      if (userStr !== '') {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(userStr)) {
+          return res.status(400).json({
+            success: false,
+            error: 'প্রেরক Gmail আইডি (SMTP User) একটি সঠিক ইমেইল হতে হবে (যেমন: yourstore@gmail.com)।',
+            field: 'smtpUser',
+          });
+        }
+        smtpUser = userStr;
+      } else {
+        smtpUser = '';
+      }
+    }
+
+    // Validate & normalize SMTP Host
+    if (body.smtpHost !== undefined && body.smtpHost !== null) {
+      const hostStr = String(body.smtpHost).trim();
+      if (hostStr !== '') {
+        const hostRegex = /^[a-zA-Z0-9.-]+$/;
+        if (hostRegex.test(hostStr)) {
+          smtpHost = hostStr;
         }
       }
     }
 
-    // Clean body and prevent accidental SMTP password overwrite
+    // Validate & normalize SMTP Port
+    if (body.smtpPort !== undefined && body.smtpPort !== null && body.smtpPort !== '') {
+      const portNum = Number(body.smtpPort);
+      if (!isNaN(portNum) && Number.isInteger(portNum) && portNum >= 1 && portNum <= 65535) {
+        smtpPort = portNum;
+      }
+    }
+
+    // Validate & Normalize App Password (smtpPass)
+    if (body.clearSmtpPass === true) {
+      finalSmtpPass = undefined;
+    } else if (typeof body.smtpPass === 'string' && body.smtpPass.trim() !== '') {
+      const cleanPass = body.smtpPass.replace(/\s+/g, '');
+      if (cleanPass.length >= 4) {
+        finalSmtpPass = cleanPass;
+      }
+    }
+
+    // Clean body and prevent accidental raw SMTP password exposure
     const cleanBody = { ...body };
     delete cleanBody.isSmtpUpdate;
     delete cleanBody.clearSmtpPass;
     delete cleanBody.smtpPass;
-
-    if (body.isSmtpUpdate !== true) {
-      delete cleanBody.smtpUser;
-      delete cleanBody.smtpHost;
-      delete cleanBody.smtpPort;
-      delete cleanBody.adminNotificationEmail;
-    }
 
     const updatedSettings: StoreSettings = {
       ...data.settings,
@@ -1363,17 +1342,12 @@ app.put('/api/admin/settings', requireAdmin, (req: Request, res: Response) => {
       ...(smtpPort !== undefined ? { smtpPort: smtpPort } : {}),
     };
 
-    if (body.isSmtpUpdate === true) {
-      if (finalSmtpPass) {
-        updatedSettings.smtpPass = finalSmtpPass;
-      } else if (body.clearSmtpPass === true) {
-        delete updatedSettings.smtpPass;
-      }
-    } else {
-      // Preserve existing smtpPass
-      if (data.settings.smtpPass) {
-        updatedSettings.smtpPass = data.settings.smtpPass;
-      }
+    if (finalSmtpPass !== undefined) {
+      updatedSettings.smtpPass = finalSmtpPass;
+    } else if (body.clearSmtpPass === true) {
+      delete updatedSettings.smtpPass;
+    } else if (data.settings.smtpPass) {
+      updatedSettings.smtpPass = data.settings.smtpPass;
     }
 
     // Number sanitization
