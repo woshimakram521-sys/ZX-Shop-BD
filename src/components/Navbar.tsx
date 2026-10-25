@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useShop } from '../context/ShopContext';
 import { ShoppingBag, Search, Phone, Truck, Menu, X, ArrowRight, Sparkles, Briefcase, Camera } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 export const Navbar: React.FC = () => {
   const {
@@ -149,6 +150,9 @@ export const Navbar: React.FC = () => {
 
           {/* Zone 3: Interactive Action Zone */}
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+            {/* PWA Install Button */}
+            <PWAInstallButton variant="navbar" />
+
             {/* Cart Button with tactile depth */}
             <button
               onClick={() => setCurrentView('cart')}

@@ -13,6 +13,7 @@ import { ContactPage, AboutPage, FAQPage, PoliciesPage } from './pages/StaticPag
 import { AdminPage } from './pages/AdminPage';
 import { ResellerPage } from './pages/ResellerPage';
 import { ImageSearchModal } from './components/ImageSearchModal';
+import { PWAInstallButton } from './components/PWAInstallButton';
 import { Home, Package, ShoppingBag, Truck, MessageCircle, X, ChevronUp } from 'lucide-react';
 
 const MainRouter: React.FC = () => {
@@ -183,6 +184,9 @@ const MainRouter: React.FC = () => {
           </a>
         </div>
       )}
+
+      {/* Global PWA Mobile Install Banner */}
+      <PWAInstallButton variant="banner" />
 
       {/* Global AI Image Search Modal */}
       <ImageSearchModal />

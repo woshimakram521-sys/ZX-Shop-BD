@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="60%" stop-color="#1e1b4b" />
+      <stop offset="100%" stop-color="#881337" />
+    </linearGradient>
+    <linearGradient id="bagGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e" />
+      <stop offset="100%" stop-color="#e11d48" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#e11d48" flood-opacity="0.35" />
+    </filter>
+  </defs>
+
+  <!-- Background squircle -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+
+  <!-- Subtle border accent -->
+  <rect x="6" y="6" width="500" height="500" rx="106" fill="none" stroke="#f43f5e" stroke-width="4" stroke-opacity="0.3" />
+
+  <!-- Bag handle -->
+  <path d="M 180 200 C 180 120, 332 120, 332 200" fill="none" stroke="#ffffff" stroke-width="26" stroke-linecap="round" />
+
+  <!-- Bag body -->
+  <rect x="110" y="180" width="292" height="236" rx="36" fill="url(#bagGrad)" filter="url(#glow)" />
+
+  <!-- ZX Branding inside bag -->
+  <g fill="#ffffff">
+    <!-- Letter Z -->
+    <path d="M 160 240 L 235 240 L 235 264 L 188 332 L 236 332 L 236 356 L 158 356 L 158 332 L 205 264 L 160 264 Z" />
+    
+    <!-- Letter X -->
+    <path d="M 276 240 L 302 240 L 327 282 L 352 240 L 378 240 L 340 298 L 380 356 L 354 356 L 327 314 L 300 356 L 274 356 L 314 298 Z" />
+  </g>
+
+  <!-- Star sparkle -->
+  <path d="M 390 140 Q 405 155 420 155 Q 405 155 390 170 Q 405 155 390 140 Z" fill="#fbbf24" />
+</svg>
