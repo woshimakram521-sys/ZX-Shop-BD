@@ -230,29 +230,51 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (contentType.includes('application/json')) {
             const data = await res.json();
             if (data && typeof data === 'object' && Array.isArray(data.products)) {
-              const serverSettings = data.settings || fallbackSettings;
-              setSettings(serverSettings);
+              let mergedSettings = data.settings || fallbackSettings;
               if (typeof window !== 'undefined') {
                 try {
-                  localStorage.removeItem('zx_custom_settings');
+                  const custom = localStorage.getItem('zx_custom_settings');
+                  if (custom) {
+                    const parsed = JSON.parse(custom);
+                    if (parsed && typeof parsed === 'object') {
+                      mergedSettings = { ...mergedSettings, ...parsed };
+                    }
+                  }
                 } catch {}
               }
+              setSettings(mergedSettings);
+
               setCategories(data.categories?.length ? data.categories : fallbackCategories);
               setDeliveryZones(data.deliveryZones?.length ? data.deliveryZones : fallbackDeliveryZones);
-              setProducts(data.products);
-              setFeaturedProducts(data.featuredProducts || data.products.filter((p: any) => p.isFeatured));
-              setPopularProducts(data.popularProducts || data.products.filter((p: any) => p.isPopular));
+
+              let allProducts = data.products;
+              if (typeof window !== 'undefined') {
+                try {
+                  const customProds = localStorage.getItem('zx_custom_products');
+                  if (customProds) {
+                    const parsed = JSON.parse(customProds);
+                    if (Array.isArray(parsed) && parsed.length) {
+                      const serverIds = new Set(allProducts.map((p: any) => p.id));
+                      allProducts = [...parsed.filter((p: any) => !serverIds.has(p.id)), ...allProducts];
+                    }
+                  }
+                } catch {}
+              }
+
+              setProducts(allProducts);
+              setFeaturedProducts(allProducts.filter((p: any) => p.isFeatured));
+              setPopularProducts(allProducts.filter((p: any) => p.isPopular));
               loaded = true;
 
               if (typeof window !== 'undefined') {
                 try {
                   localStorage.setItem('zx_shop_cache', JSON.stringify({
-                    settings: data.settings,
+                    settings: mergedSettings,
                     categories: data.categories,
                     deliveryZones: data.deliveryZones,
-                    products: data.products,
-                    featuredProducts: data.featuredProducts || data.products.filter((p: any) => p.isFeatured),
-                    popularProducts: data.popularProducts || data.products.filter((p: any) => p.isPopular),
+                    products: allProducts,
+                    featuredProducts: allProducts.filter((p: any) => p.isFeatured),
+                    popularProducts: allProducts.filter((p: any) => p.isPopular),
                   }));
                 } catch {}
               }

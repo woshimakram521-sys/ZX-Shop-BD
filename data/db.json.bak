@@ -1,33 +1,6 @@
 {
   "products": [
     {
-      "id": "prod-1792946374499",
-      "slug": "অটো-ভেরিফাইড-টেস্ট-প্রোডাক্ট-372",
-      "sku": "ZX-1783",
-      "name": "অটো ভেরিফাইড টেস্ট প্রোডাক্ট",
-      "category": "cat-1",
-      "description": "",
-      "regularPrice": 1850,
-      "shopPrice": 1850,
-      "resellerPrice": 1443,
-      "showInShop": true,
-      "showInReseller": true,
-      "allowDropship": true,
-      "stock": 20,
-      "images": [
-        "/uploads/img_1792946374496_5180.jpg"
-      ],
-      "mainImage": "/uploads/img_1792946374496_5180.jpg",
-      "variants": [],
-      "isFeatured": false,
-      "isPopular": false,
-      "isPublished": true,
-      "rating": 5,
-      "reviewCount": 0,
-      "createdAt": "2026-10-25T16:39:34.499Z",
-      "updatedAt": "2026-10-25T16:39:34.499Z"
-    },
-    {
       "id": "prod-1",
       "slug": "matte-black-smartwatch-ultra",
       "sku": "ZX-SW-01",
