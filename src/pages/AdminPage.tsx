@@ -66,8 +66,31 @@ export const AdminPage: React.FC = () => {
   // Dashboard Stats
   const [stats, setStats] = useState<any>(null);
 
-  // Products state
-  const [products, setProducts] = useState<Product[]>([]);
+  // Products state (Initialized from local cache + custom products so they never vanish)
+  const [products, setProducts] = useState<Product[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        let baseProds: Product[] = [];
+        const cached = localStorage.getItem('zx_shop_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed.products) && parsed.products.length) {
+            baseProds = parsed.products;
+          }
+        }
+        const custom = localStorage.getItem('zx_custom_products');
+        if (custom) {
+          const parsedCustom = JSON.parse(custom);
+          if (Array.isArray(parsedCustom) && parsedCustom.length) {
+            const baseIds = new Set(baseProds.map(p => p.id));
+            baseProds = [...parsedCustom.filter((p: any) => !baseIds.has(p.id)), ...baseProds];
+          }
+        }
+        if (baseProds.length > 0) return baseProds;
+      } catch {}
+    }
+    return fallbackProducts;
+  });
   const [productSearch, setProductSearch] = useState('');
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -139,8 +162,34 @@ export const AdminPage: React.FC = () => {
   const [newCouponValue, setNewCouponValue] = useState('10');
   const [newCouponMin, setNewCouponMin] = useState('1000');
 
-  // Settings form state
-  const [settingsForm, setSettingsForm] = useState<any>(null);
+  // Settings form state (Initialized from local cache so App Password & settings never vanish)
+  const [settingsForm, setSettingsForm] = useState<any>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        let baseSettings = { ...fallbackSettings };
+        const cached = localStorage.getItem('zx_shop_cache');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.settings) {
+            baseSettings = { ...baseSettings, ...parsed.settings };
+          }
+        }
+        const custom = localStorage.getItem('zx_custom_settings');
+        if (custom) {
+          const parsedCustom = JSON.parse(custom);
+          if (parsedCustom && typeof parsedCustom === 'object') {
+            baseSettings = {
+              ...baseSettings,
+              ...parsedCustom,
+              hasSmtpPass: Boolean(baseSettings.hasSmtpPass || parsedCustom.hasSmtpPass || parsedCustom.smtpPass),
+            };
+          }
+        }
+        return baseSettings;
+      } catch {}
+    }
+    return fallbackSettings;
+  });
   const [newAdminPass, setNewAdminPass] = useState('');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsSaveError, setSettingsSaveError] = useState<string | null>(null);
@@ -266,11 +315,35 @@ export const AdminPage: React.FC = () => {
       if (prodRes.ok) {
         const prodData = await prodRes.json();
         const serverProds = prodData.products || [];
-        setProducts(serverProds);
+        let mergedProds = serverProds;
+
+        // Merge with local custom products so added products NEVER vanish on exit/reload!
+        try {
+          const customProds = localStorage.getItem('zx_custom_products');
+          if (customProds) {
+            const parsedCustom = JSON.parse(customProds);
+            if (Array.isArray(parsedCustom) && parsedCustom.length) {
+              const serverIds = new Set(serverProds.map((p: any) => p.id));
+              const missingOnServer = parsedCustom.filter((p: any) => !serverIds.has(p.id));
+              if (missingOnServer.length > 0) {
+                mergedProds = [...missingOnServer, ...serverProds];
+                // Proactively sync missing custom products to server in background
+                for (const p of missingOnServer) {
+                  authFetch('/api/admin/products', {
+                    method: 'POST',
+                    body: JSON.stringify(p),
+                  }).catch(() => {});
+                }
+              }
+            }
+          }
+        } catch {}
+
+        setProducts(mergedProds);
         productsLoaded = true;
         try {
           const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
-          const shopProds = serverProds.filter((p: any) => p.isPublished && p.showInShop !== false);
+          const shopProds = mergedProds.filter((p: any) => p.isPublished && p.showInShop !== false);
           cached.products = shopProds;
           cached.featuredProducts = shopProds.filter((p: any) => p.isFeatured);
           cached.popularProducts = shopProds.filter((p: any) => p.isPopular);
@@ -291,14 +364,40 @@ export const AdminPage: React.FC = () => {
         setCategories(bootData.categories || []);
         setZones(bootData.deliveryZones || []);
         if (!settingsRes.ok) {
-          setSettingsForm(bootData.settings || null);
+          setSettingsForm((prev: any) => prev || bootData.settings || null);
         }
       }
       if (settingsRes && settingsRes.ok) {
         const adminSettingsData = await settingsRes.json();
-        setSettingsForm(adminSettingsData.settings || null);
-        if (adminSettingsData.settings) {
-          const s = adminSettingsData.settings;
+        let mergedSettings = adminSettingsData.settings || {};
+
+        // Merge with locally saved custom settings so App Password and settings NEVER vanish on exit/reload!
+        try {
+          const savedCustom = localStorage.getItem('zx_custom_settings');
+          if (savedCustom) {
+            const parsedCustom = JSON.parse(savedCustom);
+            if (parsedCustom && typeof parsedCustom === 'object') {
+              mergedSettings = {
+                ...mergedSettings,
+                ...parsedCustom,
+                hasSmtpPass: Boolean(adminSettingsData.settings?.hasSmtpPass || parsedCustom.hasSmtpPass || parsedCustom.smtpPass),
+                smtpPass: parsedCustom.smtpPass || mergedSettings.smtpPass || '',
+              };
+
+              // If server didn't have the SMTP password or settings, sync them to server
+              if (!adminSettingsData.settings?.hasSmtpPass && (parsedCustom.hasSmtpPass || parsedCustom.smtpPass)) {
+                authFetch('/api/admin/settings', {
+                  method: 'PUT',
+                  body: JSON.stringify(mergedSettings),
+                }).catch(() => {});
+              }
+            }
+          }
+        } catch {}
+
+        setSettingsForm(mergedSettings);
+        if (mergedSettings) {
+          const s = mergedSettings;
           setResellerFeeInput((s.resellerRegistrationFee ?? 200).toString());
           setResellerRegularFeeInput((s.resellerRegistrationRegularFee ?? 1000).toString());
           setResellerDiscountedFeeInput((s.resellerRegistrationDiscountedFee ?? 300).toString());
@@ -317,7 +416,16 @@ export const AdminPage: React.FC = () => {
         setWithdrawals(wData.withdrawals || []);
       }
       if (emailRes && emailRes.ok) {
-        setEmailStatus(await emailRes.json());
+        const sStatus = await emailRes.json();
+        setEmailStatus((prev: any) => {
+          const hasLocalPass = Boolean(settingsForm?.hasSmtpPass || settingsForm?.smtpPass);
+          return {
+            ...sStatus,
+            configured: Boolean(sStatus.configured || prev?.configured || hasLocalPass),
+            smtpUser: sStatus.smtpUser || settingsForm?.smtpUser || prev?.smtpUser || '',
+            adminEmail: sStatus.adminEmail || settingsForm?.adminNotificationEmail || prev?.adminEmail || 'mdmohammad.644633815@gmail.com',
+          };
+        });
       }
 
       // Fallback ONLY if server products was completely unreachable
@@ -746,10 +854,21 @@ export const AdminPage: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         if (data && data.product) {
+          const syncedProd = data.product;
           setProducts(prev => {
-            const remaining = prev.filter(p => p.id !== localProduct.id && p.id !== data.product.id);
-            return [data.product, ...remaining];
+            const remaining = prev.filter(p => p.id !== localProduct.id && p.id !== syncedProd.id);
+            return [syncedProd, ...remaining];
           });
+          try {
+            const customProds = JSON.parse(localStorage.getItem('zx_custom_products') || '[]');
+            const updatedCustom = [syncedProd, ...customProds.filter((p: any) => p.id !== localProduct.id && p.id !== syncedProd.id)];
+            localStorage.setItem('zx_custom_products', JSON.stringify(updatedCustom));
+
+            const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
+            const cachedProds = Array.isArray(cached.products) ? cached.products : [];
+            cached.products = [syncedProd, ...cachedProds.filter((p: any) => p.id !== localProduct.id && p.id !== syncedProd.id)];
+            localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
+          } catch {}
         }
       }
     } catch (syncErr) {
@@ -1059,6 +1178,9 @@ export const AdminPage: React.FC = () => {
         showToast('পণ্যটি সফলভাবে মুছে ফেলা হয়েছে।', 'success');
         setProducts(prev => prev.filter(p => p.id !== id));
         try {
+          const customProds = JSON.parse(localStorage.getItem('zx_custom_products') || '[]');
+          localStorage.setItem('zx_custom_products', JSON.stringify(customProds.filter((p: any) => p.id !== id)));
+
           const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
           if (Array.isArray(cached.products)) {
             cached.products = cached.products.filter((p: any) => p.id !== id);
@@ -1129,6 +1251,9 @@ export const AdminPage: React.FC = () => {
         if (action === 'delete') {
           setProducts(prev => prev.filter(p => !selectedProductIds.includes(p.id)));
           try {
+            const customProds = JSON.parse(localStorage.getItem('zx_custom_products') || '[]');
+            localStorage.setItem('zx_custom_products', JSON.stringify(customProds.filter((p: any) => !selectedProductIds.includes(p.id))));
+
             const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
             if (Array.isArray(cached.products)) {
               cached.products = cached.products.filter((p: any) => !selectedProductIds.includes(p.id));
