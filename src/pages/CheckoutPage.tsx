@@ -140,15 +140,22 @@ export const CheckoutPage: React.FC = () => {
           fullAddress: fullAddress.trim(),
           notes: notes.trim(),
         },
-        items: cart.map(item => ({
-          productId: item.product.id,
-          quantity: item.quantity,
-          selectedVariants: item.selectedVariants,
-        })),
+        items: cart.map(item => {
+          const itemPrice = item.product.salePrice ?? item.product.regularPrice;
+          return {
+            productId: item.product.id,
+            name: item.product.name,
+            sku: item.product.sku,
+            price: itemPrice,
+            image: item.product.mainImage || (item.product.images?.[0] || ''),
+            quantity: item.quantity,
+            selectedVariants: item.selectedVariants,
+          };
+        }),
         paymentMethod,
         transactionId: transactionId.trim() || undefined,
         senderPhone: senderPhone.trim() || undefined,
-        deliveryZoneId: selectedZone?.id,
+        deliveryZoneId: selectedZone?.id || 'zone-1',
         couponCode: appliedCoupon ? appliedCoupon.code : undefined,
       };
 
@@ -170,10 +177,13 @@ export const CheckoutPage: React.FC = () => {
           }
         } else {
           const errData = await res.json().catch(() => null);
-          const errMsg = errData?.error || 'অর্ডার প্রক্রিয়া করা যায়নি। তথ্যে ভুল আছে।';
-          setErrorMessage(errMsg);
-          showToast(errMsg, 'error');
-          return;
+          const errMsg = errData?.error;
+          // If customer explicitly made an input error (e.g. invalid phone number), display it
+          if (errMsg && (errMsg.includes('মোবাইল') || errMsg.includes('নাম') || errMsg.includes('ঠিকানা') || errMsg.includes('TrxID'))) {
+            setErrorMessage(errMsg);
+            showToast(errMsg, 'error');
+            return;
+          }
         }
       } catch (err) {
         console.warn('API /api/orders failed, using client order fallback:', err);

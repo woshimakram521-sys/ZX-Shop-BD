@@ -64,6 +64,60 @@ export function getEmailServiceStatus() {
 }
 
 /**
+ * Creates an optimized Nodemailer transporter, prioritizing Gmail service configuration
+ * for reliable TLS negotiation, port handling, and authentication.
+ */
+export function createNodemailerTransporter(cfg: { host: string; port: number; user: string; pass: string }) {
+  const isGmail = (cfg.host && cfg.host.includes('gmail')) || (cfg.user && cfg.user.toLowerCase().includes('@gmail.com'));
+  if (isGmail) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: cfg.user,
+        pass: cfg.pass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+      connectionTimeout: 15000,
+      greetingTimeout: 15000,
+      socketTimeout: 20000,
+    });
+  }
+
+  const isSecurePort = cfg.port === 465;
+  return nodemailer.createTransport({
+    host: cfg.host,
+    port: cfg.port,
+    secure: isSecurePort,
+    auth: {
+      user: cfg.user,
+      pass: cfg.pass,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+  });
+}
+
+/**
+ * Translates low-level SMTP errors (especially Google BadCredentials 535) into clear Bengali guidance.
+ */
+export function formatSmtpError(error: any): string {
+  const rawMsg = error?.message || 'অজানা SMTP ত্রুটি';
+  if (rawMsg.includes('535') || rawMsg.includes('BadCredentials') || rawMsg.includes('Username and Password not accepted') || rawMsg.includes('Invalid login')) {
+    return 'Google App Password মেলেনি (Invalid login: BadCredentials)। অনুগ্রহ করে আপনার Gmail অ্যাকাউন্টে 2-Step Verification চালু করে myaccount.google.com/apppasswords থেকে ১৬-অক্ষরের নতুন "App Password" তৈরি করে সেটি অ্যাডমিন প্যানেলে দিন। সাধারণ অ্যাকাউন্টের পাসওয়ার্ড দিয়ে চলবে না।';
+  }
+  if (rawMsg.includes('ETIMEDOUT') || rawMsg.includes('ECONNREFUSED') || rawMsg.includes('ENOTFOUND')) {
+    return `SMTP সার্ভারে সংযোগ স্থাপন করা সম্ভব হয়নি (${rawMsg})। সার্ভারের ইন্টারনেট বা হোস্ট/পোর্ট সেটিংস যাচাই করুন।`;
+  }
+  return rawMsg;
+}
+
+/**
  * Formats date into readable Bengali/Bangla string
  */
 function formatBengaliDate(isoDate: string): string {
@@ -366,20 +420,7 @@ export async function sendOrderNotificationEmail(order: Order): Promise<{
   }
 
   try {
-    const isSecurePort = cfg.port === 465;
-
-    const transporter = nodemailer.createTransport({
-      host: cfg.host,
-      port: cfg.port,
-      secure: isSecurePort,
-      auth: {
-        user: cfg.user,
-        pass: cfg.pass,
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-    });
+    const transporter = createNodemailerTransporter(cfg);
 
     const htmlContent = generateOrderEmailHtml(order);
 
@@ -398,7 +439,7 @@ export async function sendOrderNotificationEmail(order: Order): Promise<{
     sentEmailOrderNumbers.add(order.orderNumber);
     return { success: true };
   } catch (error: any) {
-    const errorMsg = error?.message || 'Unknown SMTP error';
+    const errorMsg = formatSmtpError(error);
     console.error(`[EmailService ERROR] Failed to send email for order #${order.orderNumber} to ${cfg.adminEmail}:`, errorMsg);
     return {
       success: false,
@@ -428,20 +469,7 @@ export async function sendTestNotificationEmail(recipientOverride?: string): Pro
   }
 
   try {
-    const isSecurePort = cfg.port === 465;
-
-    const transporter = nodemailer.createTransport({
-      host: cfg.host,
-      port: cfg.port,
-      secure: isSecurePort,
-      auth: {
-        user: cfg.user,
-        pass: cfg.pass,
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-    });
+    const transporter = createNodemailerTransporter(cfg);
 
     // Verify SMTP connection handshake first
     await transporter.verify();
@@ -507,7 +535,7 @@ export async function sendTestNotificationEmail(recipientOverride?: string): Pro
       recipient: targetRecipient,
     };
   } catch (error: any) {
-    const errorMsg = error?.message || 'Unknown SMTP error';
+    const errorMsg = formatSmtpError(error);
     console.error(`[EmailService TEST ERROR] Failed to send test email to ${targetRecipient}:`, errorMsg);
     return {
       success: false,
@@ -528,14 +556,7 @@ export async function sendResellerRegistrationEmail(reseller: any, referrer?: an
   }
 
   try {
-    const isSecurePort = cfg.port === 465;
-    const transporter = nodemailer.createTransport({
-      host: cfg.host,
-      port: cfg.port,
-      secure: isSecurePort,
-      auth: { user: cfg.user, pass: cfg.pass },
-      connectionTimeout: 10000,
-    });
+    const transporter = createNodemailerTransporter(cfg);
 
     const promoNotice = reseller.referredByPromoCode
       ? `<div style="background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 12px; margin: 15px 0;">
@@ -606,8 +627,9 @@ export async function sendResellerRegistrationEmail(reseller: any, referrer?: an
     console.log(`[EmailService] Reseller registration email sent for ${reseller.name}`);
     return { success: true };
   } catch (error: any) {
-    console.error('[EmailService ERROR] Failed to send reseller registration email:', error?.message);
-    return { success: false, error: error?.message };
+    const errorMsg = formatSmtpError(error);
+    console.error('[EmailService ERROR] Failed to send reseller registration email:', errorMsg);
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -621,14 +643,7 @@ export async function sendResellerOrderEmail(order: any, reseller: any): Promise
   }
 
   try {
-    const isSecurePort = cfg.port === 465;
-    const transporter = nodemailer.createTransport({
-      host: cfg.host,
-      port: cfg.port,
-      secure: isSecurePort,
-      auth: { user: cfg.user, pass: cfg.pass },
-      connectionTimeout: 10000,
-    });
+    const transporter = createNodemailerTransporter(cfg);
 
     const item = order.items?.[0] || {};
     const htmlContent = `
@@ -685,8 +700,9 @@ export async function sendResellerOrderEmail(order: any, reseller: any): Promise
     });
     return { success: true };
   } catch (error: any) {
-    console.error('[EmailService ERROR] Failed to send reseller order email:', error?.message);
-    return { success: false, error: error?.message };
+    const errorMsg = formatSmtpError(error);
+    console.error('[EmailService ERROR] Failed to send reseller order email:', errorMsg);
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -698,14 +714,7 @@ export async function sendResellerWithdrawalEmail(withdrawal: any, reseller: any
   if (!cfg.isConfigured) return { success: false, error: 'SMTP not configured' };
 
   try {
-    const isSecurePort = cfg.port === 465;
-    const transporter = nodemailer.createTransport({
-      host: cfg.host,
-      port: cfg.port,
-      secure: isSecurePort,
-      auth: { user: cfg.user, pass: cfg.pass },
-      connectionTimeout: 10000,
-    });
+    const transporter = createNodemailerTransporter(cfg);
 
     const htmlContent = `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
@@ -755,8 +764,9 @@ export async function sendResellerWithdrawalEmail(withdrawal: any, reseller: any
     });
     return { success: true };
   } catch (error: any) {
-    console.error('[EmailService ERROR] Failed to send reseller withdrawal email:', error?.message);
-    return { success: false, error: error?.message };
+    const errorMsg = formatSmtpError(error);
+    console.error('[EmailService ERROR] Failed to send reseller withdrawal email:', errorMsg);
+    return { success: false, error: errorMsg };
   }
 }
 
@@ -768,14 +778,7 @@ export async function sendContactNotificationEmail(contactData: { name: string; 
   if (!cfg.isConfigured) return { success: false, error: 'SMTP not configured' };
 
   try {
-    const isSecurePort = cfg.port === 465;
-    const transporter = nodemailer.createTransport({
-      host: cfg.host,
-      port: cfg.port,
-      secure: isSecurePort,
-      auth: { user: cfg.user, pass: cfg.pass },
-      connectionTimeout: 10000,
-    });
+    const transporter = createNodemailerTransporter(cfg);
 
     const htmlContent = `
       <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
@@ -804,7 +807,9 @@ export async function sendContactNotificationEmail(contactData: { name: string; 
     });
     return { success: true };
   } catch (error: any) {
-    console.error('[EmailService ERROR] Failed to send contact message email:', error?.message);
-    return { success: false, error: error?.message };
+    const errorMsg = formatSmtpError(error);
+    console.error('[EmailService ERROR] Failed to send contact message email:', errorMsg);
+    return { success: false, error: errorMsg };
   }
 }
+

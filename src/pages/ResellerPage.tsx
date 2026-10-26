@@ -246,7 +246,7 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
   const minPayoutAmount = settings?.resellerMinPayoutAmount ?? 500;
   const advanceDeliveryFee = settings?.resellerOrderDeliveryFee ?? 100;
 
-  // Load Products unconditionally, and Profile/Orders when token exists
+  // Load Products unconditionally, and Profile/Orders when token exists or tab switches to catalog
   useEffect(() => {
     loadResellerProducts();
     if (token) {
@@ -254,7 +254,7 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
       loadResellerOrders();
       loadWithdrawals();
     }
-  }, [token]);
+  }, [token, dashboardTab]);
 
   const loadProfile = async () => {
     if (!token) return;
@@ -313,6 +313,7 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
   const loadResellerProducts = async () => {
     setIsLoadingProducts(true);
     let loaded = false;
+    let prods: Product[] = [];
     try {
       const activeToken = token || localStorage.getItem('zx_reseller_token');
       const headers: Record<string, string> = {};
@@ -326,16 +327,7 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
 
       if (res.ok) {
         const data = await res.json();
-        const prods: Product[] = data.products || [];
-        setResellerProducts(prods);
-
-        // Pre-fill custom prices with recommended Shop Price
-        const initialPrices: Record<string, number> = {};
-        prods.forEach(p => {
-          const defaultShopPrice = p.shopPrice ?? (p.salePrice ?? p.regularPrice);
-          initialPrices[p.id] = defaultShopPrice;
-        });
-        setCustomPrices(initialPrices);
+        prods = data.products || [];
         loaded = true;
       }
     } catch {
@@ -343,17 +335,54 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
     }
 
     if (!loaded) {
-      // Fallback for Vercel static deployment
-      const prods = fallbackProducts.filter(p => p.showInReseller !== false);
-      setResellerProducts(prods);
-      const initialPrices: Record<string, number> = {};
-      prods.forEach(p => {
-        const defaultShopPrice = p.shopPrice ?? (p.salePrice ?? p.regularPrice);
-        initialPrices[p.id] = defaultShopPrice;
-      });
-      setCustomPrices(initialPrices);
+      // Fallback
+      prods = fallbackProducts.filter(p => p.showInReseller !== false);
     }
 
+    // Always merge local custom products so freshly created admin products appear immediately for resellers
+    try {
+      const customProdsRaw = localStorage.getItem('zx_custom_products');
+      const customProds: Product[] = customProdsRaw ? JSON.parse(customProdsRaw) : [];
+      const shopCacheRaw = localStorage.getItem('zx_shop_cache');
+      const shopCacheProds: Product[] = shopCacheRaw ? (JSON.parse(shopCacheRaw).products || []) : [];
+
+      const allLocal = [...customProds, ...shopCacheProds];
+      const prodMap = new Map<string, Product>();
+
+      // Server products first
+      prods.forEach(p => {
+        if (p && p.id) {
+          prodMap.set(p.id, p);
+        }
+      });
+
+      // Merge local products if published and showInReseller !== false
+      allLocal.forEach(p => {
+        if (p && p.id && p.isPublished !== false && p.showInReseller !== false) {
+          const sPrice = p.shopPrice ?? (p.salePrice ?? p.regularPrice);
+          const rPrice = p.resellerPrice ?? Math.round(sPrice * 0.78);
+          prodMap.set(p.id, {
+            ...p,
+            shopPrice: sPrice,
+            resellerPrice: rPrice,
+          });
+        }
+      });
+
+      prods = Array.from(prodMap.values());
+    } catch (e) {
+      console.warn('Error merging local reseller products:', e);
+    }
+
+    setResellerProducts(prods);
+
+    // Pre-fill custom prices with recommended Shop Price
+    const initialPrices: Record<string, number> = {};
+    prods.forEach(p => {
+      const defaultShopPrice = p.shopPrice ?? (p.salePrice ?? p.regularPrice);
+      initialPrices[p.id] = defaultShopPrice;
+    });
+    setCustomPrices(prev => ({ ...initialPrices, ...prev }));
     setIsLoadingProducts(false);
   };
 
