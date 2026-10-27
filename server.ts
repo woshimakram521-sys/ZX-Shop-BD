@@ -2438,8 +2438,12 @@ async function startServer() {
 
   if (useVite) {
     const { createServer: createViteServer } = await import('vite');
+    const isHmrDisabled = process.env.DISABLE_HMR === 'true' || Boolean(process.env.K_SERVICE || process.env.CLOUD_RUN_JOB);
     vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: isHmrDisabled ? false : undefined,
+      },
       appType: 'spa',
     });
   }
