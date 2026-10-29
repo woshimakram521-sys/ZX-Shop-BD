@@ -407,7 +407,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
   const cartSubtotal = cart.reduce((acc, item) => {
-    const price = item.product.salePrice ?? item.product.regularPrice;
+    const price = item.product.shopPrice ?? item.product.salePrice ?? item.product.regularPrice;
     return acc + price * item.quantity;
   }, 0);
 

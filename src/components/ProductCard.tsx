@@ -12,10 +12,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const { addToCart, navigateToProduct, cart } = useShop();
 
   const isOutOfStock = product.stock <= 0;
-  const currentPrice = product.salePrice ?? product.regularPrice;
-  const hasDiscount = product.salePrice && product.salePrice < product.regularPrice;
-  const discountPercent = hasDiscount
-    ? Math.round(((product.regularPrice - product.salePrice!) / product.regularPrice) * 100)
+  const currentPrice = product.shopPrice ?? product.salePrice ?? product.regularPrice;
+  const originalPrice = product.regularPrice > currentPrice ? product.regularPrice : (product.salePrice && product.salePrice < product.regularPrice ? product.regularPrice : null);
+  const hasDiscount = Boolean(originalPrice && originalPrice > currentPrice);
+  const discountPercent = hasDiscount && originalPrice
+    ? Math.round(((originalPrice - currentPrice) / originalPrice) * 100)
     : 0;
 
   // Check if this product is already in the cart
@@ -105,9 +106,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               <span className="text-sm sm:text-lg font-black text-rose-600 num-bn leading-tight">
                 ৳{currentPrice.toLocaleString('bn-BD')}
               </span>
-              {hasDiscount && (
+              {hasDiscount && originalPrice && (
                 <span className="text-[10px] sm:text-xs text-slate-400 line-through num-bn leading-tight">
-                  ৳{product.regularPrice.toLocaleString('bn-BD')}
+                  ৳{originalPrice.toLocaleString('bn-BD')}
                 </span>
               )}
             </div>

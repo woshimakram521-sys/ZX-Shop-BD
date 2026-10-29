@@ -88,16 +88,16 @@ export const ProductsPage: React.FC = () => {
         }
         if (minPrice) {
           const min = Number(minPrice);
-          if (!isNaN(min)) filtered = filtered.filter(p => (p.salePrice ?? p.regularPrice) >= min);
+          if (!isNaN(min)) filtered = filtered.filter(p => (p.shopPrice ?? p.salePrice ?? p.regularPrice) >= min);
         }
         if (maxPrice) {
           const max = Number(maxPrice);
-          if (!isNaN(max)) filtered = filtered.filter(p => (p.salePrice ?? p.regularPrice) <= max);
+          if (!isNaN(max)) filtered = filtered.filter(p => (p.shopPrice ?? p.salePrice ?? p.regularPrice) <= max);
         }
         if (sortOption === 'price_asc') {
-          filtered.sort((a, b) => (a.salePrice ?? a.regularPrice) - (b.salePrice ?? b.regularPrice));
+          filtered.sort((a, b) => (a.shopPrice ?? a.salePrice ?? a.regularPrice) - (b.shopPrice ?? b.salePrice ?? b.regularPrice));
         } else if (sortOption === 'price_desc') {
-          filtered.sort((a, b) => (b.salePrice ?? b.regularPrice) - (a.salePrice ?? a.regularPrice));
+          filtered.sort((a, b) => (b.shopPrice ?? b.salePrice ?? b.regularPrice) - (a.shopPrice ?? a.salePrice ?? a.regularPrice));
         } else if (sortOption === 'popular') {
           filtered.sort((a, b) => (b.rating || 0) - (a.rating || 0));
         }

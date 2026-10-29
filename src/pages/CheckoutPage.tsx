@@ -141,7 +141,7 @@ export const CheckoutPage: React.FC = () => {
           notes: notes.trim(),
         },
         items: cart.map(item => {
-          const itemPrice = item.product.salePrice ?? item.product.regularPrice;
+          const itemPrice = item.product.shopPrice ?? item.product.salePrice ?? item.product.regularPrice;
           return {
             productId: item.product.id,
             name: item.product.name,
@@ -195,7 +195,7 @@ export const CheckoutPage: React.FC = () => {
         orderNumber: 'ORD-' + Math.floor(100000 + Math.random() * 900000),
         customer: payload.customer,
         items: cart.map(item => {
-          const itemPrice = item.product.salePrice ?? item.product.regularPrice;
+          const itemPrice = item.product.shopPrice ?? item.product.salePrice ?? item.product.regularPrice;
           return {
             productId: item.product.id,
             name: item.product.name,
@@ -718,7 +718,7 @@ export const CheckoutPage: React.FC = () => {
 
               <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                 {cart.map((item, idx) => {
-                  const price = item.product.salePrice ?? item.product.regularPrice;
+                  const price = item.product.shopPrice ?? item.product.salePrice ?? item.product.regularPrice;
                   return (
                     <div key={idx} className="flex items-center justify-between gap-3 text-xs">
                       <div className="flex items-center gap-2.5">

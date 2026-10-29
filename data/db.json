@@ -1,6 +1,34 @@
 {
   "products": [
     {
+      "id": "prod-1793257839887",
+      "slug": "আআআ-713",
+      "sku": "ZX-2456",
+      "name": "আআআ",
+      "category": "cat-1",
+      "description": "",
+      "regularPrice": 4000,
+      "salePrice": 3000,
+      "shopPrice": 3000,
+      "resellerPrice": 2000,
+      "showInShop": true,
+      "showInReseller": true,
+      "allowDropship": true,
+      "stock": 20,
+      "images": [
+        "/uploads/img_1793257819883_796.jpg"
+      ],
+      "mainImage": "/uploads/img_1793257819883_796.jpg",
+      "variants": [],
+      "isFeatured": true,
+      "isPopular": true,
+      "isPublished": true,
+      "rating": 5,
+      "reviewCount": 0,
+      "createdAt": "2026-10-29T07:10:41.342Z",
+      "updatedAt": "2026-10-29T07:11:03.966Z"
+    },
+    {
       "id": "prod-1",
       "slug": "matte-black-smartwatch-ultra",
       "sku": "ZX-SW-01",

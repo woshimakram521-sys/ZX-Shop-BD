@@ -729,12 +729,14 @@ export const AdminPage: React.FC = () => {
     setFormSku(prod.sku);
     setFormCategory(prod.category);
     setFormDesc(prod.description);
-    setFormRegularPrice(prod.regularPrice.toString());
-    setFormSalePrice(prod.salePrice ? prod.salePrice.toString() : '');
     const currentShop = prod.shopPrice ?? (prod.salePrice ?? prod.regularPrice);
     const currentReseller = prod.resellerPrice ?? Math.round(currentShop * 0.78);
+    // If regularPrice > currentShop, that means MRP exists and is higher than selling price
+    const mrp = prod.regularPrice > currentShop ? prod.regularPrice.toString() : '';
+    setFormRegularPrice(mrp);
+    setFormSalePrice(prod.salePrice ? prod.salePrice.toString() : '');
     setFormShopPrice(currentShop.toString());
-    setFormResellerPrice(currentReseller.toString());
+    setFormResellerPrice(prod.resellerPrice ? prod.resellerPrice.toString() : currentReseller.toString());
     setFormStock(prod.stock.toString());
     setFormShowInShop(prod.showInShop !== false);
     setFormShowInReseller(prod.showInReseller !== false);
@@ -756,13 +758,33 @@ export const AdminPage: React.FC = () => {
       return;
     }
 
-    const effectiveShopPrice = Number(formShopPrice || formRegularPrice || 0);
-    const effectiveRegPrice = Number(formRegularPrice || formShopPrice || 0);
+    const shPrice = Number(formShopPrice || 0);
+    const mrpPrice = Number(formRegularPrice || 0);
 
-    if (effectiveShopPrice <= 0 && effectiveRegPrice <= 0) {
-      showToast('অনুগ্রহ করে পণ্যের সঠিক মূল্য (৳) লিখুন।', 'error');
+    if (shPrice <= 0 && mrpPrice <= 0) {
+      showToast('অনুগ্রহ করে পণ্যের শপ বিক্রয় মূল্য (৳) লিখুন।', 'error');
       return;
     }
+
+    // Effective selling price for the store
+    const effectiveShopPrice = shPrice > 0 ? shPrice : mrpPrice;
+
+    // If MRP (regularPrice) is entered and higher than shop price, save regularPrice = mrpPrice, salePrice = effectiveShopPrice
+    // Otherwise regularPrice = effectiveShopPrice, salePrice = undefined (no discount strike-through)
+    let regPrice = effectiveShopPrice;
+    let sPrice: number | undefined = undefined;
+
+    if (mrpPrice > effectiveShopPrice) {
+      regPrice = mrpPrice;
+      sPrice = effectiveShopPrice;
+    }
+
+    // Reseller wholesale price: if entered use it, otherwise 78% of effectiveShopPrice
+    const resPrice = formResellerPrice && Number(formResellerPrice) > 0
+      ? Number(formResellerPrice)
+      : Math.round(effectiveShopPrice * 0.78);
+
+    const stockCount = formStock && !isNaN(Number(formStock)) ? Math.max(0, Number(formStock)) : 20;
 
     // Parse variants string
     const parsedVariants: any[] = [];
@@ -782,14 +804,6 @@ export const AdminPage: React.FC = () => {
 
     const mainImg = formMainImage || (formImages.length > 0 ? formImages[0] : FALLBACK_PRODUCT_IMAGE);
 
-    const regPrice = effectiveRegPrice > 0 ? effectiveRegPrice : effectiveShopPrice;
-    const sPrice = formSalePrice && Number(formSalePrice) > 0 ? Number(formSalePrice) : undefined;
-    const shPrice = effectiveShopPrice > 0 ? effectiveShopPrice : (sPrice ?? regPrice);
-    const resPrice = formResellerPrice && Number(formResellerPrice) > 0
-      ? Number(formResellerPrice)
-      : Math.round(shPrice * 0.78);
-    const stockCount = formStock && !isNaN(Number(formStock)) ? Math.max(0, Number(formStock)) : 20;
-
     const payload = {
       name: formName.trim(),
       sku: formSku.trim() || `ZX-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -797,7 +811,7 @@ export const AdminPage: React.FC = () => {
       description: formDesc.trim(),
       regularPrice: regPrice,
       salePrice: sPrice,
-      shopPrice: shPrice,
+      shopPrice: effectiveShopPrice,
       resellerPrice: resPrice,
       showInShop: formShowInShop,
       showInReseller: formShowInReseller,
@@ -2036,7 +2050,7 @@ export const AdminPage: React.FC = () => {
                       <h4 className="text-xs font-bold text-slate-900 line-clamp-1">{p.name}</h4>
                       <div className="flex items-center justify-between mt-1">
                         <span className="text-xs font-bold text-rose-600 num-bn">
-                          ৳{(p.salePrice ?? p.regularPrice).toLocaleString('bn-BD')}
+                          ৳{(p.shopPrice ?? (p.salePrice ?? p.regularPrice)).toLocaleString('bn-BD')}
                         </span>
                         <span className={`text-[11px] font-bold num-bn ${p.stock <= 5 ? 'text-rose-600' : 'text-slate-600'}`}>
                           স্টক: {p.stock} টি
@@ -2268,82 +2282,137 @@ export const AdminPage: React.FC = () => {
               </div>
 
               {/* ২. মূল্য, রিসেলার রেট ও স্টক তথ্য */}
-              <div className="p-3 sm:p-4 bg-slate-50/70 rounded-2xl border border-slate-100 space-y-3">
-                <h3 className="font-bold text-slate-800 text-xs flex items-center gap-1.5">
-                  <Tag className="w-3.5 h-3.5 text-rose-600" />
-                  <span>২. মূল্য ও রিসেলার রেট (স্বতন্ত্র মূল্য নির্ধারণ)</span>
-                </h3>
+              <div className="p-3.5 sm:p-4 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                  <h3 className="font-bold text-slate-800 text-xs sm:text-sm flex items-center gap-1.5">
+                    <Tag className="w-4 h-4 text-rose-600" />
+                    <span>২. মূল্য ও রিসেলার রেট (স্বতন্ত্র মূল্য নির্ধারণ)</span>
+                  </h3>
+                  {formShopPrice && Number(formShopPrice) > 0 && (
+                    <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200 w-fit">
+                      স্বয়ংক্রিয় ৭৮% রেট: ৳{Math.round(Number(formShopPrice) * 0.78).toLocaleString('bn-BD')}
+                    </span>
+                  )}
+                </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  <div>
-                    <label className="font-bold text-rose-700 block mb-1 text-[11px]">
-                      শপ বিক্রয় মূল্য (৳) *
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      value={formShopPrice}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setFormShopPrice(val);
-                        if (!formRegularPrice) setFormRegularPrice(val);
-                        const n = Number(val);
-                        if (n > 0 && !formResellerPrice) {
-                          setFormResellerPrice(String(Math.round(n * 0.78)));
-                        }
-                      }}
-                      placeholder="যেমন: 2190"
-                      className="w-full clay-inset px-2.5 py-2 text-slate-800 font-bold num-bn"
-                    />
-                    <span className="text-[9px] text-slate-400">সাধারণ ক্রেতারা এই দামে কিনবে</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                  {/* ১. শপ বিক্রয় মূল্য */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <label className="font-bold text-rose-700 block mb-1 text-xs">
+                        শপ বিক্রয় মূল্য (৳) <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        value={formShopPrice}
+                        onChange={e => setFormShopPrice(e.target.value)}
+                        placeholder="যেমন: 2190"
+                        className="w-full clay-inset px-2.5 py-2 text-slate-800 font-bold num-bn text-sm"
+                      />
+                    </div>
+                    <span className="text-[10px] text-slate-500 mt-1 block">সাধারণ ক্রেতারা এই দামে কিনবে</span>
                   </div>
 
-                  <div>
-                    <label className="font-bold text-emerald-700 block mb-1 text-[11px]">
-                      রিসেলার পাইকারি রেট (৳)
-                    </label>
-                    <input
-                      type="number"
-                      value={formResellerPrice}
-                      onChange={e => setFormResellerPrice(e.target.value)}
-                      placeholder="যেমন: 1700 (স্বয়ংক্রিয়)"
-                      className="w-full clay-inset px-2.5 py-2 text-emerald-800 font-bold num-bn"
-                    />
-                    <span className="text-[9px] text-slate-400">ফাঁকা রাখলে ৭৮% রেট হবে</span>
+                  {/* ২. রিসেলার পাইকারি রেট */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-bold text-emerald-700 block text-xs">
+                          রিসেলার পাইকারি রেট (৳)
+                        </label>
+                        {formShopPrice && Number(formShopPrice) > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setFormResellerPrice(String(Math.round(Number(formShopPrice) * 0.78)))}
+                            className="text-[10px] text-emerald-700 hover:text-emerald-800 underline font-bold cursor-pointer"
+                            title="৭৮% রেট বসান"
+                          >
+                            ৭৮% বসান
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="number"
+                        value={formResellerPrice}
+                        onChange={e => setFormResellerPrice(e.target.value)}
+                        placeholder={formShopPrice && Number(formShopPrice) > 0 ? `যেমন: ${Math.round(Number(formShopPrice) * 0.78)}` : "যেমন: 1700"}
+                        className="w-full clay-inset px-2.5 py-2 text-emerald-800 font-bold num-bn text-sm"
+                      />
+                    </div>
+                    <span className="text-[10px] text-slate-500 mt-1 block">
+                      {formResellerPrice ? 'কাস্টম পাইকারি রেট নির্ধারিত' : 'ফাঁকা রাখলে স্বয়ংক্রিয় ৭৮% রেট হবে'}
+                    </span>
                   </div>
 
-                  <div>
-                    <label className="font-bold text-slate-600 block mb-1 text-[11px]">
-                      MRP / নিয়মিত রেট (৳)
-                    </label>
-                    <input
-                      type="number"
-                      value={formRegularPrice}
-                      onChange={e => {
-                        const val = e.target.value;
-                        setFormRegularPrice(val);
-                        if (!formShopPrice) setFormShopPrice(val);
-                      }}
-                      placeholder="যেমন: 2500"
-                      className="w-full clay-inset px-2.5 py-2 text-slate-700 num-bn"
-                    />
-                    <span className="text-[9px] text-slate-400">কাটা দাগ দেখাতে (ঐচ্ছিক)</span>
+                  {/* ৩. MRP / নিয়মিত রেট */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1 text-xs">
+                        MRP / নিয়মিত রেট (৳)
+                      </label>
+                      <input
+                        type="number"
+                        value={formRegularPrice}
+                        onChange={e => setFormRegularPrice(e.target.value)}
+                        placeholder="যেমন: 2500"
+                        className="w-full clay-inset px-2.5 py-2 text-slate-700 num-bn text-sm"
+                      />
+                    </div>
+                    <div className="mt-1">
+                      {formRegularPrice && formShopPrice && Number(formRegularPrice) > Number(formShopPrice) ? (
+                        <span className="text-[10px] text-emerald-600 font-bold block">
+                          ✓ ৳{Number(formRegularPrice) - Number(formShopPrice)} ({Math.round(((Number(formRegularPrice) - Number(formShopPrice)) / Number(formRegularPrice)) * 100)}%) ছাড় ও কাটা দাগ দেখাবে
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-500 block">কাটা দাগ দেখাতে (ঐচ্ছিক)</span>
+                      )}
+                    </div>
                   </div>
 
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1 text-[11px]">
-                      স্টক পরিমাণ *
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      value={formStock}
-                      onChange={e => setFormStock(e.target.value)}
-                      className="w-full clay-inset px-2.5 py-2 text-slate-800 num-bn"
-                    />
-                    <span className="text-[9px] text-slate-400">মজুদ পরিমাণ</span>
+                  {/* ৪. স্টক পরিমাণ */}
+                  <div className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <label className="font-bold text-slate-700 block mb-1 text-xs">
+                        স্টক পরিমাণ <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        value={formStock}
+                        onChange={e => setFormStock(e.target.value)}
+                        placeholder="যেমন: 20"
+                        className="w-full clay-inset px-2.5 py-2 text-slate-800 num-bn text-sm"
+                      />
+                    </div>
+                    <span className="text-[10px] text-slate-500 mt-1 block">মজুদ পণ্যের সংখ্যা</span>
                   </div>
                 </div>
+
+                {/* Live Preview Summary Bar */}
+                {formShopPrice && Number(formShopPrice) > 0 && (
+                  <div className="bg-white rounded-xl px-3 py-2 text-[11px] text-slate-700 flex flex-wrap items-center justify-between gap-2 border border-slate-200 shadow-sm">
+                    <span className="flex items-center gap-1">
+                      <span>শপ বিক্রয় মূল্য:</span>
+                      <strong className="text-rose-700 font-black">৳{Number(formShopPrice).toLocaleString('bn-BD')}</strong>
+                      {formRegularPrice && Number(formRegularPrice) > Number(formShopPrice) && (
+                        <span className="text-slate-400 line-through text-[10px]">৳{Number(formRegularPrice).toLocaleString('bn-BD')}</span>
+                      )}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span>রিসেলার পাইকারি রেট:</span>
+                      <strong className="text-emerald-700 font-black">
+                        ৳{(formResellerPrice ? Number(formResellerPrice) : Math.round(Number(formShopPrice) * 0.78)).toLocaleString('bn-BD')}
+                      </strong>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span>রিসেলারের সম্ভাব্য লাভ:</span>
+                      <strong className="text-blue-700 font-black">
+                        ৳{(Number(formShopPrice) - (formResellerPrice ? Number(formResellerPrice) : Math.round(Number(formShopPrice) * 0.78))).toLocaleString('bn-BD')}
+                      </strong>
+                    </span>
+                  </div>
+                )}
 
                 {/* Visibility Toggles */}
                 <div className="pt-2 border-t border-slate-200/60 flex flex-wrap gap-4 text-xs">

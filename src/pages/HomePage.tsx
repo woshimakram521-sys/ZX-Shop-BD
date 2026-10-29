@@ -178,10 +178,11 @@ export const HomePage: React.FC = () => {
 
   // Filter actual products with real discount from the database
   const discountedProducts = allPool
-    .filter((p, index, self) => 
-      p.salePrice && p.salePrice < p.regularPrice &&
-      self.findIndex(t => t.id === p.id) === index
-    )
+    .filter((p, index, self) => {
+      const cur = p.shopPrice ?? p.salePrice ?? p.regularPrice;
+      const isDiscounted = (p.regularPrice > cur) || (p.salePrice && p.salePrice < p.regularPrice);
+      return isDiscounted && self.findIndex(t => t.id === p.id) === index;
+    })
     .slice(0, 4);
 
   // Trending & all published products for homepage display (so NO newly added product is hidden)

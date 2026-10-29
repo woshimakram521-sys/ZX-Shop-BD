@@ -93,7 +93,7 @@ export const CartPage: React.FC = () => {
 
             <div className="space-y-3.5 divide-y divide-slate-100">
               {cart.map((item, idx) => {
-                const price = item.product.salePrice ?? item.product.regularPrice;
+                const price = item.product.shopPrice ?? item.product.salePrice ?? item.product.regularPrice;
                 const itemTotal = price * item.quantity;
                 const variantKeys = Object.keys(item.selectedVariants || {});
 

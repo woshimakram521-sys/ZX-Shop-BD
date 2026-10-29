@@ -186,7 +186,7 @@ export const ProductDetailPage: React.FC = () => {
   // Client-side SEO & Dynamic Document Meta Updates
   useEffect(() => {
     if (product) {
-      const currentPrice = product.salePrice ?? product.regularPrice;
+      const currentPrice = product.shopPrice ?? product.salePrice ?? product.regularPrice;
       const formattedTitle = `${product.name} (৳${currentPrice.toLocaleString('bn-BD')}) | ZX Shop`;
       document.title = formattedTitle;
 
@@ -258,7 +258,7 @@ export const ProductDetailPage: React.FC = () => {
   const handleShareTrigger = async () => {
     if (!product) return;
     const url = getProductUrl();
-    const currentPrice = product.salePrice ?? product.regularPrice;
+    const currentPrice = product.shopPrice ?? product.salePrice ?? product.regularPrice;
     const shareData = {
       title: product.name,
       text: `${product.name} - ZX Shop-এ বিশেষ মূল্য ৳${currentPrice.toLocaleString('bn-BD')}`,
@@ -286,7 +286,7 @@ export const ProductDetailPage: React.FC = () => {
   const handleShareWhatsApp = () => {
     if (!product) return;
     const url = getProductUrl();
-    const currentPrice = product.salePrice ?? product.regularPrice;
+    const currentPrice = product.shopPrice ?? product.salePrice ?? product.regularPrice;
     const message = `*${product.name}*\nমূল্য: ৳${currentPrice.toLocaleString('bn-BD')}\nবিস্তারিত ও অর্ডার করতে ভিজিট করুন:\n${url}`;
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
     window.open(waUrl, '_blank', 'noopener,noreferrer');
@@ -391,9 +391,10 @@ export const ProductDetailPage: React.FC = () => {
     );
   }
 
-  const currentPrice = product.salePrice ?? product.regularPrice;
-  const hasDiscount = product.salePrice && product.salePrice < product.regularPrice;
-  const discountAmount = hasDiscount ? product.regularPrice - product.salePrice! : 0;
+  const currentPrice = product.shopPrice ?? product.salePrice ?? product.regularPrice;
+  const originalPrice = product.regularPrice > currentPrice ? product.regularPrice : (product.salePrice && product.salePrice < product.regularPrice ? product.regularPrice : null);
+  const hasDiscount = Boolean(originalPrice && originalPrice > currentPrice);
+  const discountAmount = hasDiscount && originalPrice ? originalPrice - currentPrice : 0;
   const isOutOfStock = product.stock <= 0;
   const allImages = (product.images && product.images.length > 0)
     ? product.images
@@ -532,9 +533,9 @@ export const ProductDetailPage: React.FC = () => {
               <span className="text-2xl sm:text-4xl font-black text-rose-600 num-bn">
                 ৳{currentPrice.toLocaleString('bn-BD')}
               </span>
-              {hasDiscount && (
+              {hasDiscount && originalPrice && (
                 <span className="text-sm sm:text-base text-slate-400 line-through num-bn">
-                  ৳{product.regularPrice.toLocaleString('bn-BD')}
+                  ৳{originalPrice.toLocaleString('bn-BD')}
                 </span>
               )}
             </div>
