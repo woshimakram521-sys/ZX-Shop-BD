@@ -117,6 +117,7 @@ export const AdminPage: React.FC = () => {
   const [formIsPublished, setFormIsPublished] = useState(true);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [customImageUrl, setCustomImageUrl] = useState('');
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
 
   // CSV Import State
   const [isCsvModalOpen, setIsCsvModalOpen] = useState(false);
@@ -324,7 +325,8 @@ export const AdminPage: React.FC = () => {
             const parsedCustom = JSON.parse(customProds);
             if (Array.isArray(parsedCustom) && parsedCustom.length) {
               const serverIds = new Set(serverProds.map((p: any) => p.id));
-              const missingOnServer = parsedCustom.filter((p: any) => !serverIds.has(p.id));
+              const serverNames = new Set(serverProds.map((p: any) => (p.name || '').trim().toLowerCase()));
+              const missingOnServer = parsedCustom.filter((p: any) => !serverIds.has(p.id) && !serverNames.has((p.name || '').trim().toLowerCase()));
               if (missingOnServer.length > 0) {
                 mergedProds = [...missingOnServer, ...serverProds];
                 // Proactively sync missing custom products to server in background
@@ -809,70 +811,77 @@ export const AdminPage: React.FC = () => {
       isPublished: shouldPublish,
     };
 
-    const localProduct: Product = {
-      id: editingProduct ? editingProduct.id : `prod-${Date.now()}`,
-      slug: editingProduct?.slug || (formName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || `prod-${Date.now()}`),
+    const targetId = editingProduct ? editingProduct.id : `prod-${Date.now()}`;
+    const payloadWithId = {
       ...payload,
-      rating: editingProduct?.rating || 5.0,
-      reviewCount: editingProduct?.reviewCount || 0,
-      createdAt: editingProduct?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      id: targetId,
     };
 
-    // 1. Immediately persist locally (Local-First: instant responsiveness, works online & offline)
-    setProducts(prev => {
-      const remaining = prev.filter(p => p.id !== localProduct.id);
-      return [localProduct, ...remaining];
-    });
+    setIsSavingProduct(true);
 
-    try {
-      const customProds = JSON.parse(localStorage.getItem('zx_custom_products') || '[]');
-      const filteredCustom = customProds.filter((p: any) => p.id !== localProduct.id);
-      localStorage.setItem('zx_custom_products', JSON.stringify([localProduct, ...filteredCustom]));
-
-      const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
-      const cachedProds = Array.isArray(cached.products) ? cached.products : [];
-      cached.products = [localProduct, ...cachedProds.filter((p: any) => p.id !== localProduct.id)];
-      localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
-    } catch {}
-
-    setIsProductModalOpen(false);
-    showToast(
-      shouldPublish
-        ? 'পণ্যটি সফলভাবে Publish করা হয়েছে এবং শপে দেখা যাচ্ছে!'
-        : 'পণ্যটি সফলভাবে Draft হিসেবে সংরক্ষণ করা হয়েছে।',
-      'success'
-    );
-    reloadBootstrap();
-
-    // 2. Sync to server in background
     try {
       const res = await authFetch(editingProduct ? `/api/admin/products/${editingProduct.id}` : '/api/admin/products', {
         method: editingProduct ? 'PUT' : 'POST',
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payloadWithId),
       });
+
       if (res.ok) {
         const data = await res.json();
-        if (data && data.product) {
-          const syncedProd = data.product;
-          setProducts(prev => {
-            const remaining = prev.filter(p => p.id !== localProduct.id && p.id !== syncedProd.id);
-            return [syncedProd, ...remaining];
-          });
-          try {
-            const customProds = JSON.parse(localStorage.getItem('zx_custom_products') || '[]');
-            const updatedCustom = [syncedProd, ...customProds.filter((p: any) => p.id !== localProduct.id && p.id !== syncedProd.id)];
-            localStorage.setItem('zx_custom_products', JSON.stringify(updatedCustom));
+        const savedProd: Product = data.product || {
+          ...payloadWithId,
+          slug: editingProduct?.slug || (formName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || targetId),
+          rating: editingProduct?.rating || 5.0,
+          reviewCount: editingProduct?.reviewCount || 0,
+          createdAt: editingProduct?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
 
-            const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
-            const cachedProds = Array.isArray(cached.products) ? cached.products : [];
-            cached.products = [syncedProd, ...cachedProds.filter((p: any) => p.id !== localProduct.id && p.id !== syncedProd.id)];
-            localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
-          } catch {}
-        }
+        setProducts(prev => [savedProd, ...prev.filter(p => p.id !== savedProd.id)]);
+
+        try {
+          const customProds = JSON.parse(localStorage.getItem('zx_custom_products') || '[]');
+          const filtered = customProds.filter((p: any) => p.id !== savedProd.id);
+          localStorage.setItem('zx_custom_products', JSON.stringify([savedProd, ...filtered]));
+
+          const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
+          const cachedProds = Array.isArray(cached.products) ? cached.products : [];
+          cached.products = [savedProd, ...cachedProds.filter((p: any) => p.id !== savedProd.id)];
+          localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
+        } catch {}
+
+        setIsProductModalOpen(false);
+        showToast(
+          shouldPublish
+            ? 'পণ্যটি সফলভাবে Publish করা হয়েছে এবং শপে ও রিসেলারে দেখা যাচ্ছে!'
+            : 'পণ্যটি সফলভাবে Draft হিসেবে সংরক্ষণ করা হয়েছে।',
+          'success'
+        );
+
+        await reloadBootstrap();
+        await loadDashboardData();
+      } else {
+        const errData = await res.json().catch(() => null);
+        showToast(errData?.error || 'পণ্য সংরক্ষণ ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।', 'error');
       }
     } catch (syncErr) {
-      console.warn('[Product Sync] Server sync delayed, retained in local storage:', syncErr);
+      console.warn('[Product Sync] Server sync error, saved locally:', syncErr);
+      const fallbackProd: Product = {
+        ...payloadWithId,
+        slug: editingProduct?.slug || (formName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') || targetId),
+        rating: editingProduct?.rating || 5.0,
+        reviewCount: editingProduct?.reviewCount || 0,
+        createdAt: editingProduct?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      setProducts(prev => [fallbackProd, ...prev.filter(p => p.id !== fallbackProd.id)]);
+      try {
+        const customProds = JSON.parse(localStorage.getItem('zx_custom_products') || '[]');
+        localStorage.setItem('zx_custom_products', JSON.stringify([fallbackProd, ...customProds.filter((p: any) => p.id !== fallbackProd.id)]));
+      } catch {}
+      setIsProductModalOpen(false);
+      showToast('পণ্যটি সফলভাবে অফলাইনে সংরক্ষিত হয়েছে।', 'info');
+    } finally {
+      setIsSavingProduct(false);
     }
   };
 
@@ -1406,9 +1415,8 @@ export const AdminPage: React.FC = () => {
     }
 
     showToast('দোকানের সকল সেটিংস সফলভাবে সংরক্ষিত হয়েছে!', 'success');
-    reloadBootstrap();
 
-    // 2. Sync to server in background
+    // 2. Sync to server and then refresh bootstrap
     try {
       const res = await authFetch('/api/admin/settings', {
         method: 'PUT',
@@ -1424,6 +1432,7 @@ export const AdminPage: React.FC = () => {
           });
         }
       }
+      await reloadBootstrap();
 
       // Instantly refresh email service status if available
       try {
@@ -1517,9 +1526,7 @@ export const AdminPage: React.FC = () => {
       mode: 'production',
     }));
 
-    reloadBootstrap();
-
-    // 2. Sync to server in background
+    // 2. Sync to server and then refresh bootstrap
     try {
       const res = await authFetch('/api/admin/settings', {
         method: 'PUT',
@@ -1536,6 +1543,7 @@ export const AdminPage: React.FC = () => {
           });
         }
       }
+      await reloadBootstrap();
 
       // Instantly refresh email service status from server
       try {
@@ -2530,20 +2538,22 @@ export const AdminPage: React.FC = () => {
 
               <button
                 type="button"
+                disabled={isSavingProduct}
                 onClick={() => handleSaveProduct(false)}
-                className="clay-btn-secondary px-4 py-2.5 text-xs font-bold text-slate-700 flex items-center justify-center gap-1.5 cursor-pointer"
+                className="clay-btn-secondary px-4 py-2.5 text-xs font-bold text-slate-700 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 <FileCheck className="w-4 h-4 text-amber-600" />
-                <span>ড্রাফট হিসেবে সংরক্ষণ</span>
+                <span>{isSavingProduct ? 'সংরক্ষণ হচ্ছে...' : 'ড্রাফট হিসেবে সংরক্ষণ'}</span>
               </button>
 
               <button
                 type="button"
+                disabled={isSavingProduct}
                 onClick={() => handleSaveProduct(true)}
-                className="clay-btn-primary px-5 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                className="clay-btn-primary px-5 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
-                <span>পণ্য সরাসরি প্রকাশ করুন (Publish)</span>
+                <span>{isSavingProduct ? 'প্রকাশ হচ্ছে...' : 'পণ্য সরাসরি প্রকাশ করুন (Publish)'}</span>
               </button>
             </div>
           </div>

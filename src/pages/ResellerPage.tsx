@@ -321,7 +321,7 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
         headers['Authorization'] = `Bearer ${activeToken}`;
       }
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       const res = await fetch('/api/reseller/products', { headers, signal: controller.signal });
       clearTimeout(timeoutId);
 

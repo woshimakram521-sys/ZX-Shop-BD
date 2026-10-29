@@ -9,7 +9,7 @@
       "description": "উচ্চমানের এমোলেড কার্ভড ডিসপ্লে, হার্টরেট মনিটর, স্লিপ ট্র্যাকিং, ব্লুটুথ কলিং এবং ওয়াটারপ্রুফ বডি। ফুল চার্জে একটানা ৭ দিন পর্যন্ত ব্যাটারি ব্যাকআপ। স্টাইলিশ কালো সিলিকন বেল্ট সহ সম্পূর্ণ বক্স প্যাক।",
       "regularPrice": 2800,
       "salePrice": 2190,
-      "stock": 21,
+      "stock": 20,
       "images": [
         "/src/assets/images/product_smartwatch_black_1791605919110.jpg"
       ],
@@ -30,7 +30,7 @@
       "rating": 4.9,
       "reviewCount": 38,
       "createdAt": "2026-10-10T04:23:54.509Z",
-      "updatedAt": "2026-10-26T12:18:29.631Z",
+      "updatedAt": "2026-10-29T06:55:55.533Z",
       "shopPrice": 2190,
       "resellerPrice": 1708,
       "showInShop": true,
@@ -368,6 +368,50 @@
   ],
   "orders": [
     {
+      "id": "ord-1793256955533-280",
+      "orderNumber": "ZX-5533280",
+      "customer": {
+        "fullName": "টেস্ট কাস্টমার",
+        "phone": "01712345678",
+        "division": "",
+        "district": "",
+        "deliveryArea": "ঢাকা সিটির ভিতরে",
+        "fullAddress": "মিরপুর ১০, ঢাকা",
+        "notes": ""
+      },
+      "items": [
+        {
+          "productId": "prod-1",
+          "name": "ম্যাট ব্ল্যাক প্রিমিয়াম স্মার্টওয়াচ আল্ট্রা (AMOLED ডিসপ্লে)",
+          "sku": "ZX-SW-01",
+          "price": 2190,
+          "quantity": 1,
+          "image": "/src/assets/images/product_smartwatch_black_1791605919110.jpg",
+          "selectedVariants": {},
+          "total": 2190
+        }
+      ],
+      "subtotal": 2190,
+      "discount": 0,
+      "deliveryCharge": 70,
+      "deliveryZoneName": "ঢাকা সিটির ভিতরে",
+      "totalAmount": 2260,
+      "paymentMethod": "cod",
+      "paymentStatus": "pending",
+      "orderStatus": "pending",
+      "createdAt": "2026-10-29T06:55:55.533Z",
+      "updatedAt": "2026-10-29T06:55:55.533Z",
+      "statusHistory": [
+        {
+          "status": "pending",
+          "timestamp": "2026-10-29T06:55:55.533Z",
+          "note": "অর্ডারটি সফলভাবে জমা নেওয়া হয়েছে। খুব শীঘ্রই আমাদের প্রতিনিধি কল দিয়ে নিশ্চিত করবেন।"
+        }
+      ],
+      "emailNotificationStatus": "failed",
+      "emailNotificationError": "Google App Password মেলেনি (Invalid login: BadCredentials)। অনুগ্রহ করে আপনার Gmail অ্যাকাউন্টে 2-Step Verification চালু করে myaccount.google.com/apppasswords থেকে ১৬-অক্ষরের নতুন \"App Password\" তৈরি করে সেটি অ্যাডমিন প্যানেলে দিন। সাধারণ অ্যাকাউন্টের পাসওয়ার্ড দিয়ে চলবে না।"
+    },
+    {
       "id": "ord-1793017109632-338",
       "orderNumber": "ZX-9631338",
       "customer": {
@@ -408,8 +452,7 @@
           "note": "অর্ডারটি সফলভাবে জমা নেওয়া হয়েছে। খুব শীঘ্রই আমাদের প্রতিনিধি কল দিয়ে নিশ্চিত করবেন।"
         }
       ],
-      "emailNotificationStatus": "failed",
-      "emailNotificationError": "Google App Password মেলেনি (Invalid login: BadCredentials)। অনুগ্রহ করে আপনার Gmail অ্যাকাউন্টে 2-Step Verification চালু করে myaccount.google.com/apppasswords থেকে ১৬-অক্ষরের নতুন \"App Password\" তৈরি করে সেটি অ্যাডমিন প্যানেলে দিন। সাধারণ অ্যাকাউন্টের পাসওয়ার্ড দিয়ে চলবে না।"
+      "emailNotificationStatus": "pending"
     },
     {
       "id": "ord-1791643193217-974",

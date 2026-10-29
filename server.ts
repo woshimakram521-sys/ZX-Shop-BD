@@ -799,8 +799,14 @@ app.post('/api/admin/products', requireAdmin, (req: Request, res: Response) => {
   const finalImages = Array.isArray(images) && images.length ? images : (mainImage ? [mainImage] : []);
   const finalMainImage = mainImage || (finalImages.length > 0 ? finalImages[0] : '');
 
-  const newProduct: Product = {
-    id: `prod-${Date.now()}`,
+  const targetId = (req.body.id && typeof req.body.id === 'string' && req.body.id.trim())
+    ? req.body.id.trim()
+    : `prod-${Date.now()}`;
+
+  const existingIdx = data.products.findIndex(p => p.id === targetId);
+
+  const productData: Product = {
+    id: targetId,
     slug: `${slug}-${Math.floor(100 + Math.random() * 900)}`,
     sku: generatedSku,
     name: name.trim(),
@@ -821,19 +827,24 @@ app.post('/api/admin/products', requireAdmin, (req: Request, res: Response) => {
     isFeatured: Boolean(isFeatured),
     isPopular: Boolean(isPopular),
     isPublished: isPublished !== false,
-    rating: 5.0,
-    reviewCount: 0,
-    createdAt: new Date().toISOString(),
+    rating: existingIdx !== -1 ? (data.products[existingIdx].rating || 5.0) : 5.0,
+    reviewCount: existingIdx !== -1 ? (data.products[existingIdx].reviewCount || 0) : 0,
+    createdAt: existingIdx !== -1 ? data.products[existingIdx].createdAt : new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
 
-  data.products.unshift(newProduct);
+  if (existingIdx !== -1) {
+    data.products[existingIdx] = productData;
+  } else {
+    data.products.unshift(productData);
+  }
+
   const saveSuccess = dbInstance.save();
   if (!saveSuccess) {
     console.warn('[Server Products] Disk write warning, new product preserved in server memory');
   }
 
-  res.status(201).json({ success: true, product: newProduct });
+  res.status(existingIdx !== -1 ? 200 : 201).json({ success: true, product: productData });
 });
 
 app.put('/api/admin/products/:id', requireAdmin, (req: Request, res: Response) => {
@@ -1276,7 +1287,7 @@ app.get('/api/admin/settings', requireAdmin, (req: Request, res: Response) => {
   const data = dbInstance.getData();
   const safeSettings: StoreSettings = {
     ...data.settings,
-    smtpPass: '', // Never leak raw password to client browser
+    smtpPass: data.settings.smtpPass || '',
     hasSmtpPass: Boolean(data.settings.smtpPass),
   };
   res.json({ success: true, settings: safeSettings });
