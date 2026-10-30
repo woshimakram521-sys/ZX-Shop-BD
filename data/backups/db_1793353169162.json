@@ -1,6 +1,34 @@
 {
   "products": [
     {
+      "id": "prod-1793257839887",
+      "slug": "আআআ-713",
+      "sku": "ZX-2456",
+      "name": "আআআ",
+      "category": "cat-1",
+      "description": "",
+      "regularPrice": 4000,
+      "salePrice": 3000,
+      "shopPrice": 3000,
+      "resellerPrice": 2000,
+      "showInShop": true,
+      "showInReseller": true,
+      "allowDropship": true,
+      "stock": 20,
+      "images": [
+        "/uploads/img_1793257819883_796.jpg"
+      ],
+      "mainImage": "/uploads/img_1793257819883_796.jpg",
+      "variants": [],
+      "isFeatured": true,
+      "isPopular": true,
+      "isPublished": true,
+      "rating": 5,
+      "reviewCount": 0,
+      "createdAt": "2026-10-29T07:10:41.342Z",
+      "updatedAt": "2026-10-29T07:11:03.966Z"
+    },
+    {
       "id": "prod-1",
       "slug": "matte-black-smartwatch-ultra",
       "sku": "ZX-SW-01",
@@ -9,7 +37,7 @@
       "description": "উচ্চমানের এমোলেড কার্ভড ডিসপ্লে, হার্টরেট মনিটর, স্লিপ ট্র্যাকিং, ব্লুটুথ কলিং এবং ওয়াটারপ্রুফ বডি। ফুল চার্জে একটানা ৭ দিন পর্যন্ত ব্যাটারি ব্যাকআপ। স্টাইলিশ কালো সিলিকন বেল্ট সহ সম্পূর্ণ বক্স প্যাক।",
       "regularPrice": 2800,
       "salePrice": 2190,
-      "stock": 22,
+      "stock": 30,
       "images": [
         "/src/assets/images/product_smartwatch_black_1791605919110.jpg"
       ],
@@ -30,12 +58,13 @@
       "rating": 4.9,
       "reviewCount": 38,
       "createdAt": "2026-10-10T04:23:54.509Z",
-      "updatedAt": "2026-10-13T14:03:01.523Z",
-      "shopPrice": 2190,
-      "resellerPrice": 1708,
+      "updatedAt": "2026-10-30T09:39:17.818Z",
+      "shopPrice": 2250,
+      "resellerPrice": 1750,
       "showInShop": true,
       "showInReseller": true,
-      "allowDropship": true
+      "allowDropship": true,
+      "maxResellerPrice": 2600
     },
     {
       "id": "prod-2",
@@ -368,6 +397,49 @@
   ],
   "orders": [
     {
+      "id": "ord-1793017109632-338",
+      "orderNumber": "ZX-9631338",
+      "customer": {
+        "fullName": "রহিম উদ্দিন",
+        "phone": "01712345678",
+        "division": "",
+        "district": "",
+        "deliveryArea": "ঢাকা সিটির ভিতরে",
+        "fullAddress": "মিরপুর ১০, ঢাকা",
+        "notes": ""
+      },
+      "items": [
+        {
+          "productId": "prod-1",
+          "name": "ম্যাট ব্ল্যাক প্রিমিয়াম স্মার্টওয়াচ আল্ট্রা (AMOLED ডিসপ্লে)",
+          "sku": "ZX-SW-01",
+          "price": 2190,
+          "quantity": 1,
+          "image": "/src/assets/images/product_smartwatch_black_1791605919110.jpg",
+          "selectedVariants": {},
+          "total": 2190
+        }
+      ],
+      "subtotal": 2190,
+      "discount": 0,
+      "deliveryCharge": 70,
+      "deliveryZoneName": "ঢাকা সিটির ভিতরে",
+      "totalAmount": 2260,
+      "paymentMethod": "cod",
+      "paymentStatus": "pending",
+      "orderStatus": "pending",
+      "createdAt": "2026-10-26T12:18:29.632Z",
+      "updatedAt": "2026-10-26T12:18:29.632Z",
+      "statusHistory": [
+        {
+          "status": "pending",
+          "timestamp": "2026-10-26T12:18:29.632Z",
+          "note": "অর্ডারটি সফলভাবে জমা নেওয়া হয়েছে। খুব শীঘ্রই আমাদের প্রতিনিধি কল দিয়ে নিশ্চিত করবেন।"
+        }
+      ],
+      "emailNotificationStatus": "pending"
+    },
+    {
       "id": "ord-1791643193217-974",
       "orderNumber": "ZX-3217974",
       "customer": {
@@ -512,21 +584,21 @@
     {
       "id": "zone-1",
       "name": "ঢাকা সিটির ভিতরে",
-      "rate": 60,
+      "rate": 70,
       "estimatedDays": "১–২ দিন",
       "isActive": true
     },
     {
       "id": "zone-2",
-      "name": "ঢাকা সাব-এরিয়া (গাজীপুর/সাভার/কেরানীগঞ্জ)",
-      "rate": 100,
+      "name": "ঢাকা সাব-এরিয়া",
+      "rate": 110,
       "estimatedDays": "২–৩ দিন",
       "isActive": true
     },
     {
       "id": "zone-3",
-      "name": "ঢাকার বাইরে (সমগ্র বাংলাদেশ)",
-      "rate": 130,
+      "name": "ঢাকার বাইরে",
+      "rate": 140,
       "estimatedDays": "৩–৫ দিন",
       "isActive": true
     }
@@ -587,13 +659,13 @@
     }
   ],
   "settings": {
-    "storeName": "ZX Shop – বাংলা ই-কমার্স",
-    "storeTagline": "আপনার পছন্দের প্রিমিয়াম অনলাইন শপ",
+    "storeName": "ZX Shop",
+    "storeTagline": "আপনার পছন্দের অনলাইন শপ",
     "logoUrl": "",
     "contactPhone": "+880 1711-234567",
     "whatsappNumber": "+880 1711-234567",
     "email": "support@zxshop.com.bd",
-    "address": "বাড়ি #১২, রোড #০৫, ধানমন্ডি, ঢাকা-১২০৫, বাংলাদেশ",
+    "address": "ধানমন্ডি, ঢাকা",
     "bkashNumber": "01711234567",
     "bkashType": "Personal",
     "nagadNumber": "01711234567",
@@ -613,17 +685,18 @@
     "metaTitle": "ZX Shop – আধুনিক ও সম্পূর্ণ বাংলা অনলাইন শপ",
     "metaDescription": "বাংলাদেশের সেরা ই-কমার্স প্ল্যাটফর্ম ZX Shop। পোশাক, কসমেটিকস, ইলেকট্রনিক্স ও গ্যাজেট ঘরে বসে অর্ডার করুন। ক্যাশ অন ডেলিভারি সহজলভ্য।",
     "adminNotificationEmail": "mdmohammad.644633815@gmail.com",
-    "smtpUser": "zxshop.official@gmail.com",
-    "smtpPass": "abcdefghijklmnop",
+    "smtpUser": "mdmohammad.644633815@gmail.com",
+    "smtpPass": "",
     "smtpHost": "smtp.gmail.com",
     "smtpPort": 465,
     "resellerRegistrationEnabled": true,
-    "resellerRegistrationFee": 200,
+    "resellerRegistrationFee": 300,
     "resellerMinPayoutAmount": 500,
     "resellerRegistrationRegularFee": 1000,
     "resellerRegistrationDiscountedFee": 300,
     "resellerReferralBonus": 100,
-    "resellerOrderDeliveryFee": 100
+    "resellerOrderDeliveryFee": 100,
+    "rocketNumber": "01711234567"
   },
   "adminCredentials": {
     "username": "admin",
@@ -631,9 +704,6 @@
     "salt": "zx_shop_salt_2026"
   },
   "adminSessions": [
-    "3c5c3435d6aedee4354ae0b9a7a18259294afcbf87ce65e2aa60c8185d2423c3",
-    "3976c691e9bcd7910476572c4caa967cc100ab79990834e073155fb4b332d236",
-    "55c737c40dfedd5330ef78e6e9d3de75d3ade341f9ad74bd503a74397f50540d",
     "5c90876201c445b001a1d14f65992bef5b2ae5729f2a9262e589abfaa7b4e75c",
     "97488609638a6a87f000ab4feac87de6ac09b8b77bf55fb27d149473a8113144",
     "340647b377695e4bc48f3b5ebc7854d793f251a0a5aaf91348daf1d54555ded6",
@@ -642,7 +712,18 @@
     "723c97ed7c5aef710c4a0b8f117e749f58a3116083e1a14ac4453669c3c71aef",
     "efd6c1de23c3d864ace21627eed0ea01233b959a37461de8d5f57941dd7c22ee",
     "41af5ebe7f70523a379aabcff6c84e3fbf89c7e8f169aa4c324f40baa11455a1",
-    "0cdaa66bd2497885c67eedd2a62edea0086e2e8fb4e2e14e0950d9b3d4b68036"
+    "0cdaa66bd2497885c67eedd2a62edea0086e2e8fb4e2e14e0950d9b3d4b68036",
+    "5203f805291f4a37116d33d1abc4156457353c43468213edd1c349066dde1f3f",
+    "53147611ec398dab149e9575f097cfb96d986ac42d380b791a662bd6022d76d1",
+    "1a1972d54ca5743b102bc032ea1279288a4df6fa9f3c3117c7e060d3a86d0e88",
+    "21c6b6fd594e5a58bbd1754955f13bcecce80e7de5b9e4ab1086a38a586be3d6",
+    "f932b9e0d92d100e518f938cc1cada90cfb1bdb853a5990f3bab04611cafb4ba",
+    "afc09ee075f4b273c7a644eb4a7221a8658dbe9c37a86e291c0ef206020a4d26",
+    "f4071fef5912126b5fa5212ecdeac48185ea937d21937e89c6f3c10df8897eaf",
+    "3f3acdd6688536ffa6f523d859480f221e174299cb6c6e2755e870b95f49f0e4",
+    "6adf93f922edd1516535aa9bfd1163fa31e67e97ab75af0333be2a2f10a7fcd8",
+    "43645852cdbd98a9e0405d49db40172a0c33cffa6d475542d508d61b989b3861",
+    "adm-tok-955579714064493f4674e9760c5193294908309db894f961043ec1fcaa4c6173"
   ],
   "resellers": [
     {

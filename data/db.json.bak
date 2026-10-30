@@ -1,32 +1,6 @@
 {
   "products": [
     {
-      "id": "prod-test-limit",
-      "slug": "টেস্ট-লিমিট-প্রোডাক্ট-954",
-      "sku": "ZX-4402",
-      "name": "টেস্ট লিমিট প্রোডাক্ট",
-      "category": "cat-1",
-      "description": "",
-      "regularPrice": 2000,
-      "shopPrice": 2000,
-      "resellerPrice": 1500,
-      "maxResellerPrice": 2200,
-      "showInShop": true,
-      "showInReseller": true,
-      "allowDropship": true,
-      "stock": 10,
-      "images": [],
-      "mainImage": "",
-      "variants": [],
-      "isFeatured": false,
-      "isPopular": false,
-      "isPublished": true,
-      "rating": 5,
-      "reviewCount": 0,
-      "createdAt": "2026-10-30T08:02:30.674Z",
-      "updatedAt": "2026-10-30T08:02:30.674Z"
-    },
-    {
       "id": "prod-1793257839887",
       "slug": "আআআ-713",
       "sku": "ZX-2456",
@@ -63,7 +37,7 @@
       "description": "উচ্চমানের এমোলেড কার্ভড ডিসপ্লে, হার্টরেট মনিটর, স্লিপ ট্র্যাকিং, ব্লুটুথ কলিং এবং ওয়াটারপ্রুফ বডি। ফুল চার্জে একটানা ৭ দিন পর্যন্ত ব্যাটারি ব্যাকআপ। স্টাইলিশ কালো সিলিকন বেল্ট সহ সম্পূর্ণ বক্স প্যাক।",
       "regularPrice": 2800,
       "salePrice": 2190,
-      "stock": 20,
+      "stock": 30,
       "images": [
         "/src/assets/images/product_smartwatch_black_1791605919110.jpg"
       ],
@@ -84,12 +58,13 @@
       "rating": 4.9,
       "reviewCount": 38,
       "createdAt": "2026-10-10T04:23:54.509Z",
-      "updatedAt": "2026-10-29T06:55:55.533Z",
-      "shopPrice": 2190,
-      "resellerPrice": 1708,
+      "updatedAt": "2026-10-30T09:39:29.183Z",
+      "shopPrice": 2250,
+      "resellerPrice": 1750,
       "showInShop": true,
       "showInReseller": true,
-      "allowDropship": true
+      "allowDropship": true,
+      "maxResellerPrice": 2600
     },
     {
       "id": "prod-2",
@@ -729,9 +704,6 @@
     "salt": "zx_shop_salt_2026"
   },
   "adminSessions": [
-    "3c5c3435d6aedee4354ae0b9a7a18259294afcbf87ce65e2aa60c8185d2423c3",
-    "3976c691e9bcd7910476572c4caa967cc100ab79990834e073155fb4b332d236",
-    "55c737c40dfedd5330ef78e6e9d3de75d3ade341f9ad74bd503a74397f50540d",
     "5c90876201c445b001a1d14f65992bef5b2ae5729f2a9262e589abfaa7b4e75c",
     "97488609638a6a87f000ab4feac87de6ac09b8b77bf55fb27d149473a8113144",
     "340647b377695e4bc48f3b5ebc7854d793f251a0a5aaf91348daf1d54555ded6",
@@ -748,7 +720,10 @@
     "f932b9e0d92d100e518f938cc1cada90cfb1bdb853a5990f3bab04611cafb4ba",
     "afc09ee075f4b273c7a644eb4a7221a8658dbe9c37a86e291c0ef206020a4d26",
     "f4071fef5912126b5fa5212ecdeac48185ea937d21937e89c6f3c10df8897eaf",
-    "3f3acdd6688536ffa6f523d859480f221e174299cb6c6e2755e870b95f49f0e4"
+    "3f3acdd6688536ffa6f523d859480f221e174299cb6c6e2755e870b95f49f0e4",
+    "6adf93f922edd1516535aa9bfd1163fa31e67e97ab75af0333be2a2f10a7fcd8",
+    "43645852cdbd98a9e0405d49db40172a0c33cffa6d475542d508d61b989b3861",
+    "adm-tok-955579714064493f4674e9760c5193294908309db894f961043ec1fcaa4c6173"
   ],
   "resellers": [
     {
