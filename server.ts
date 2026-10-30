@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 import path from 'path';
@@ -27,6 +28,7 @@ const cliHost = hostIndex !== -1 && args[hostIndex + 1] ? args[hostIndex + 1] : 
 
 const PORT = cliPort || (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
 const HOST = cliHost || process.env.HOST || '0.0.0.0';
+const isExplicitDev = args.includes('--dev') || process.env.NODE_ENV === 'development';
 const isProd = process.env.NODE_ENV === 'production';
 
 // Ensure uploads folder exists
@@ -2469,7 +2471,8 @@ async function startServer() {
   let vite: any = null;
   const distPath = path.resolve(process.cwd(), 'dist');
   const distExists = fs.existsSync(distPath) && fs.existsSync(path.join(distPath, 'index.html'));
-  const useVite = !isProd || !distExists;
+  // Use Vite development server only when explicitly in dev mode or when dist does not exist
+  const useVite = isExplicitDev || (!isProd && !distExists);
 
   if (useVite) {
     const { createServer: createViteServer } = await import('vite');
@@ -2568,6 +2571,28 @@ async function startServer() {
 
   if (useVite && vite) {
     app.use(vite.middlewares);
+
+    // Development SPA Catch-All fallback: Transform and serve index.html for all non-API navigation routes
+    // (fixes Cannot GET /admin, /checkout, /reseller, /cart etc. on refresh or direct load)
+    app.use('*', async (req: Request, res: Response, next: NextFunction) => {
+      if (req.originalUrl.startsWith('/api/') || req.originalUrl.startsWith('/uploads/') || req.path.includes('.')) {
+        return next();
+      }
+      try {
+        const rootIndex = path.resolve(process.cwd(), 'index.html');
+        if (!fs.existsSync(rootIndex)) {
+          return next();
+        }
+        let html = fs.readFileSync(rootIndex, 'utf-8');
+        html = await vite.transformIndexHtml(req.originalUrl, html);
+        res.status(200).set({ 'Content-Type': 'text/html' }).send(html);
+      } catch (e: any) {
+        if (vite && typeof vite.ssrFixStacktrace === 'function') {
+          vite.ssrFixStacktrace(e);
+        }
+        next(e);
+      }
+    });
   } else {
     const distPath = path.resolve(process.cwd(), 'dist');
     const indexPath = path.join(distPath, 'index.html');
@@ -2577,7 +2602,10 @@ async function startServer() {
       console.warn(`[Server Warning] Production build not found at ${distPath}. Static assets will fallback to root.`);
     }
 
-    app.get('*', (req: Request, res: Response) => {
+    app.get('*', (req: Request, res: Response, next: NextFunction) => {
+      if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
+        return next();
+      }
       if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
       } else {
@@ -2592,8 +2620,18 @@ async function startServer() {
   }
 
   if (!process.env.VERCEL && !process.env.NOW_REGION) {
-    app.listen(PORT, HOST, () => {
-      console.log(`ZX Shop server running at http://${HOST}:${PORT} (${isProd ? 'production' : 'development'})`);
+    const server = app.listen(PORT, HOST, () => {
+      console.log(`ZX Shop server running at http://${HOST}:${PORT} (${useVite ? 'development' : 'production'})`);
+    });
+
+    server.on('error', (err: any) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`\n[Server Warning] Port ${PORT} is already in use by another application.`);
+        console.error(`Try specifying another port: npm run dev -- --port ${PORT + 1}`);
+        console.error(`Or set PORT in your .env file: PORT=3001\n`);
+      } else {
+        console.error('[Server Error]:', err);
+      }
     });
   }
 }
