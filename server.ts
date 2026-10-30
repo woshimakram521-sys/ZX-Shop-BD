@@ -2570,6 +2570,44 @@ async function startServer() {
   });
 
   if (useVite && vite) {
+    // Intercept /@vite/client to suppress HMR WebSocket connection errors in cloud container environments
+    app.use('/@vite/client', (req: Request, res: Response, next: NextFunction) => {
+      const origWrite = res.write;
+      const origEnd = res.end;
+      const chunks: Buffer[] = [];
+
+      res.write = function (chunk: any, ...args: any[]) {
+        if (chunk) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        return true;
+      };
+
+      res.end = function (chunk?: any, ...args: any[]) {
+        if (chunk) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        let content = Buffer.concat(chunks).toString('utf-8');
+        content = content
+          .replace(
+            /reject\(\s*\/\* @__PURE__ \*\/ new Error\("WebSocket closed without opened\."\)\);/g,
+            'resolve(); return;'
+          )
+          .replace(
+            /reject\(\s*new Error\("WebSocket closed without opened\."\)\);/g,
+            'resolve(); return;'
+          )
+          .replace(
+            /console\.error\(`\[vite\] failed to connect to websocket \(\$\{e\}\)\. `\);/g,
+            '/* [vite ws suppressed] */'
+          )
+          .replace(
+            /throw e;/g,
+            'return;'
+          );
+        res.setHeader('content-length', Buffer.byteLength(content));
+        return origEnd.call(res, content, 'utf-8');
+      };
+
+      next();
+    });
+
     app.use(vite.middlewares);
 
     // Development SPA Catch-All fallback: Transform and serve index.html for all non-API navigation routes
