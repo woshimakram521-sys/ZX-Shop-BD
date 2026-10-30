@@ -17,6 +17,7 @@ export interface Product {
   // Independent Pricing for Shop & Reseller
   shopPrice?: number; // Price for normal customers (defaults to salePrice ?? regularPrice)
   resellerPrice?: number; // Wholesale/Base price for resellers
+  maxResellerPrice?: number; // Maximum allowed selling price limit for resellers
   costPrice?: number; // Cost/Base cost of product
   // Channel Visibility Controls
   showInShop?: boolean; // Visible in public shop (default: true)

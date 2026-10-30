@@ -365,6 +365,7 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
             ...p,
             shopPrice: sPrice,
             resellerPrice: rPrice,
+            maxResellerPrice: p.maxResellerPrice,
           });
         }
       });
@@ -634,10 +635,16 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
   // Open Order Modal for a product
   const openOrderModal = (product: Product) => {
     const wholesaleCost = product.resellerPrice ?? Math.round((product.shopPrice ?? product.regularPrice) * 0.78);
-    const initialPrice = customPrices[product.id] || product.shopPrice || product.regularPrice;
+    let initialPrice = customPrices[product.id] || product.shopPrice || product.regularPrice;
+    if (initialPrice <= wholesaleCost) {
+      initialPrice = wholesaleCost + 200;
+    }
+    if (product.maxResellerPrice && initialPrice > product.maxResellerPrice) {
+      initialPrice = product.maxResellerPrice;
+    }
     setSelectedProduct(product);
     setOrderQty(1);
-    setOrderSellingPrice(initialPrice > wholesaleCost ? initialPrice : wholesaleCost + 200);
+    setOrderSellingPrice(initialPrice);
     if (deliveryZones.length > 0 && !custZoneId) {
       setCustZoneId(deliveryZones[0].id);
     }
@@ -684,6 +691,11 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
     const wholesaleCost = selectedProduct.resellerPrice ?? Math.round((selectedProduct.shopPrice ?? selectedProduct.regularPrice) * 0.78);
     if (orderSellingPrice < wholesaleCost) {
       showToast(`বিক্রয় মূল্য অবশ্যই পাইকারি রেট (৳${wholesaleCost}) এর সমান বা বেশি হতে হবে।`, 'error');
+      return;
+    }
+
+    if (selectedProduct.maxResellerPrice && orderSellingPrice > selectedProduct.maxResellerPrice) {
+      showToast(`বিক্রয় মূল্য নির্ধারিত সর্বোচ্চ সীমা (৳${selectedProduct.maxResellerPrice.toLocaleString('bn-BD')}) এর বেশি হতে পারবে না।`, 'error');
       return;
     }
 
@@ -1770,26 +1782,54 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
                                 ৳{wholesalePrice.toLocaleString('bn-BD')}
                               </span>
                             </div>
+                            {product.maxResellerPrice && (
+                              <div className="flex justify-between items-center text-amber-800 text-[11px] font-semibold pt-1 border-t border-slate-200/60">
+                                <span>সর্বোচ্চ বিক্রয় সীমা:</span>
+                                <span className="bg-amber-100 text-amber-900 px-2 py-0.5 rounded-lg font-black">
+                                  ৳{product.maxResellerPrice.toLocaleString('bn-BD')}
+                                </span>
+                              </div>
+                            )}
                           </div>
 
                           {/* Live Profit Calculator Input */}
-                          <div className="bg-emerald-50/70 border border-emerald-200 rounded-2xl p-3 mb-3">
-                            <div className="flex items-center justify-between text-xs font-bold text-emerald-950 mb-1">
+                          <div className={`border rounded-2xl p-3 mb-3 transition-colors ${
+                            product.maxResellerPrice && customSelling > product.maxResellerPrice
+                              ? 'bg-rose-50/90 border-rose-300'
+                              : 'bg-emerald-50/70 border-emerald-200'
+                          }`}>
+                            <div className="flex items-center justify-between text-xs font-bold text-slate-800 mb-1">
                               <span>আপনার বিক্রয় মূল্য (৳):</span>
-                              <span className={`text-[11px] font-black ${profitPerUnit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                                {profitPerUnit >= 0 ? `লাভ: +৳${profitPerUnit}` : `ঘাটতি: ৳${profitPerUnit}`}
+                              <span className={`text-[11px] font-black ${
+                                product.maxResellerPrice && customSelling > product.maxResellerPrice
+                                  ? 'text-rose-600'
+                                  : (profitPerUnit >= 0 ? 'text-emerald-700' : 'text-rose-600')
+                              }`}>
+                                {product.maxResellerPrice && customSelling > product.maxResellerPrice
+                                  ? `⚠️ সর্বোচ্চ সীমা ৳${product.maxResellerPrice}!`
+                                  : (profitPerUnit >= 0 ? `লাভ: +৳${profitPerUnit}` : `ঘাটতি: ৳${profitPerUnit}`)}
                               </span>
                             </div>
                             <input
                               type="number"
                               min={wholesalePrice}
+                              max={product.maxResellerPrice}
                               value={customSelling}
                               onChange={e => {
                                 const val = Number(e.target.value);
                                 setCustomPrices(prev => ({ ...prev, [product.id]: val }));
                               }}
-                              className="w-full px-3 py-1.5 rounded-xl border border-emerald-300 bg-white text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                              className={`w-full px-3 py-1.5 rounded-xl border bg-white text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 ${
+                                product.maxResellerPrice && customSelling > product.maxResellerPrice
+                                  ? 'border-rose-400 focus:ring-rose-500 text-rose-700'
+                                  : 'border-emerald-300 focus:ring-emerald-500'
+                              }`}
                             />
+                            {product.maxResellerPrice && customSelling > product.maxResellerPrice && (
+                              <span className="text-[10px] text-rose-600 font-bold block mt-1">
+                                সীমা অতিক্রম করেছে (সর্বোচ্চ অনুমোদিত ৳{product.maxResellerPrice.toLocaleString('bn-BD')})
+                              </span>
+                            )}
                           </div>
                         </div>
 
@@ -2361,14 +2401,31 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">প্রতি পিস বিক্রয় মূল্য (৳)</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">প্রতি পিস বিক্রয় মূল্য (৳)</label>
+                    {selectedProduct.maxResellerPrice && (
+                      <span className="text-[10px] text-amber-700 font-bold bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">
+                        সর্বোচ্চ: ৳{selectedProduct.maxResellerPrice.toLocaleString('bn-BD')}
+                      </span>
+                    )}
+                  </div>
                   <input
                     type="number"
                     min={selectedProduct.resellerPrice ?? 0}
+                    max={selectedProduct.maxResellerPrice}
                     value={orderSellingPrice}
                     onChange={e => setOrderSellingPrice(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-emerald-700 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    className={`w-full px-3 py-2 rounded-xl border text-xs font-bold focus:outline-none focus:ring-2 ${
+                      selectedProduct.maxResellerPrice && orderSellingPrice > selectedProduct.maxResellerPrice
+                        ? 'border-rose-400 focus:ring-rose-500 text-rose-700 bg-rose-50/50'
+                        : 'border-slate-300 text-emerald-700 focus:ring-rose-500'
+                    }`}
                   />
+                  {selectedProduct.maxResellerPrice && orderSellingPrice > selectedProduct.maxResellerPrice && (
+                    <span className="text-[10px] text-rose-600 font-bold block mt-1">
+                      ⚠️ সর্বোচ্চ সীমা ৳{selectedProduct.maxResellerPrice.toLocaleString('bn-BD')} অতিক্রম করেছে!
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -2687,12 +2744,16 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
 
               <button
                 type="submit"
-                disabled={isSubmittingOrder || !orderAgreedTerms}
+                disabled={isSubmittingOrder || !orderAgreedTerms || Boolean(selectedProduct.maxResellerPrice && orderSellingPrice > selectedProduct.maxResellerPrice)}
                 className="w-full mt-2 py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-lg shadow-rose-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
               >
                 {isSubmittingOrder ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin" /> ড্রপশিপিং অর্ডার তৈরি হচ্ছে...
+                  </>
+                ) : selectedProduct.maxResellerPrice && orderSellingPrice > selectedProduct.maxResellerPrice ? (
+                  <>
+                    <ShoppingBag className="w-4 h-4" /> সর্বোচ্চ মূল্য সীমা অতিক্রম করেছে (৳{selectedProduct.maxResellerPrice})
                   </>
                 ) : (
                   <>
@@ -2845,6 +2906,14 @@ ${variantText ? `🎯 সাইজ/কালার অপশন:\n${variantText}
                       ৳{(viewingProductDetails.resellerPrice ?? Math.round((viewingProductDetails.shopPrice ?? viewingProductDetails.regularPrice) * 0.78)).toLocaleString('bn-BD')}
                     </span>
                   </div>
+                  {viewingProductDetails.maxResellerPrice && (
+                    <div className="flex justify-between text-amber-800 font-bold">
+                      <span>সর্বোচ্চ বিক্রয় সীমা:</span>
+                      <span className="bg-amber-100 px-2 py-0.2 rounded text-amber-900 font-black">
+                        ৳{viewingProductDetails.maxResellerPrice.toLocaleString('bn-BD')}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-emerald-700 font-bold pt-1 border-t border-slate-200/60">
                     <span>সম্ভাব্য লাভ (প্রতি পিস):</span>
                     <span className="font-black">

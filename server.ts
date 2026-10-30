@@ -87,6 +87,7 @@ function sanitizePublicProduct(p: Product): Product {
     regularPrice: p.salePrice ? p.regularPrice : effectiveShopPrice,
     shopPrice: effectiveShopPrice,
     resellerPrice: undefined, // Never leak reseller price to public
+    maxResellerPrice: undefined, // Never leak reseller limit to public
     costPrice: undefined, // Never leak cost price to public
   };
 }
@@ -758,7 +759,7 @@ app.get('/api/admin/products', requireAdmin, (req: Request, res: Response) => {
 app.post('/api/admin/products', requireAdmin, (req: Request, res: Response) => {
   const {
     name, sku, category, description,
-    regularPrice, salePrice, shopPrice, resellerPrice, costPrice,
+    regularPrice, salePrice, shopPrice, resellerPrice, maxResellerPrice, costPrice,
     showInShop, showInReseller, allowDropship,
     stock, images, mainImage, variants, isFeatured, isPopular, isPublished
   } = req.body;
@@ -785,6 +786,9 @@ app.post('/api/admin/products', requireAdmin, (req: Request, res: Response) => {
   const determinedResellerPrice = resellerPrice !== undefined && resellerPrice !== null && resellerPrice !== '' && !isNaN(Number(resellerPrice))
     ? Number(resellerPrice)
     : (costPrice !== undefined && costPrice !== null && !isNaN(Number(costPrice)) ? Number(costPrice) : Math.round(determinedShopPrice * 0.78));
+  const determinedMaxResellerPrice = maxResellerPrice !== undefined && maxResellerPrice !== null && maxResellerPrice !== '' && !isNaN(Number(maxResellerPrice))
+    ? Number(maxResellerPrice)
+    : undefined;
 
   if (determinedShopPrice < 0 || determinedResellerPrice < 0) {
     return res.status(400).json({ error: 'মূল্য ঋণাত্মক (নেগেটিভ) হতে পারে না।' });
@@ -816,6 +820,7 @@ app.post('/api/admin/products', requireAdmin, (req: Request, res: Response) => {
     salePrice: sPrice,
     shopPrice: determinedShopPrice,
     resellerPrice: determinedResellerPrice,
+    maxResellerPrice: determinedMaxResellerPrice,
     costPrice: costPrice !== undefined && costPrice !== null && !isNaN(Number(costPrice)) ? Number(costPrice) : undefined,
     showInShop: showInShop !== false,
     showInReseller: showInReseller !== false,
@@ -881,6 +886,10 @@ app.put('/api/admin/products/:id', requireAdmin, (req: Request, res: Response) =
     newResellerPrice = Number(req.body.resellerPrice);
   }
 
+  const newMaxResellerPrice = req.body.maxResellerPrice !== undefined
+    ? (req.body.maxResellerPrice !== null && req.body.maxResellerPrice !== '' && !isNaN(Number(req.body.maxResellerPrice)) ? Number(req.body.maxResellerPrice) : undefined)
+    : existing.maxResellerPrice;
+
   if (newShopPrice < 0 || newResellerPrice < 0) {
     return res.status(400).json({ error: 'মূল্য ঋণাত্মক হতে পারে না।' });
   }
@@ -892,6 +901,7 @@ app.put('/api/admin/products/:id', requireAdmin, (req: Request, res: Response) =
     salePrice: newSalePrice,
     shopPrice: newShopPrice,
     resellerPrice: newResellerPrice,
+    maxResellerPrice: newMaxResellerPrice,
     costPrice: req.body.costPrice !== undefined ? (req.body.costPrice ? Number(req.body.costPrice) : undefined) : existing.costPrice,
     showInShop: req.body.showInShop !== undefined ? Boolean(req.body.showInShop) : (existing.showInShop ?? true),
     showInReseller: req.body.showInReseller !== undefined ? Boolean(req.body.showInReseller) : (existing.showInReseller ?? true),
@@ -1766,6 +1776,7 @@ app.get(['/api/reseller/products', '/api/reseller/catalog'], optionalReseller, (
         salePrice: p.salePrice,
         shopPrice: sPrice,
         resellerPrice: rPrice,
+        maxResellerPrice: p.maxResellerPrice,
         minSuggestedMargin: Math.max(0, sPrice - rPrice),
         variants: p.variants,
         banglaTitle: p.banglaTitle,
@@ -1852,6 +1863,12 @@ app.post(['/api/reseller/orders', '/api/reseller/orders/create'], requireReselle
   if (isNaN(sellingPricePerUnit) || sellingPricePerUnit < wholesaleUnitCost) {
     return res.status(400).json({
       error: `কাস্টমার বিক্রয় মূল্য অবশ্যই রিসেলার পাইকারি মূল্য (৳${wholesaleUnitCost}) এর বেশি বা সমান হতে হবে।`,
+    });
+  }
+
+  if (prod.maxResellerPrice && sellingPricePerUnit > prod.maxResellerPrice) {
+    return res.status(400).json({
+      error: `কাস্টমার বিক্রয় মূল্য অ্যাডমিন নির্ধারিত সর্বোচ্চ সীমা (৳${prod.maxResellerPrice.toLocaleString('bn-BD')}) এর বেশি হতে পারবে না।`,
     });
   }
 
@@ -2173,7 +2190,7 @@ const formatVariantsToCsv = (variants?: any[]) => {
 app.get('/api/admin/products/export-csv', requireAdmin, (req: Request, res: Response) => {
   const data = dbInstance.getData();
   const headers = [
-    'ID', 'SKU', 'Name', 'Category', 'Shop Price', 'Reseller Price',
+    'ID', 'SKU', 'Name', 'Category', 'Shop Price', 'Reseller Price', 'Max Reseller Price',
     'Regular Price', 'Sale Price', 'Cost Price', 'Stock', 'Variants', 'Show in Shop',
     'Show in Reseller', 'Allow Dropship', 'Published', 'Image URL'
   ];
@@ -2185,6 +2202,7 @@ app.get('/api/admin/products/export-csv', requireAdmin, (req: Request, res: Resp
     p.category,
     p.shopPrice ?? (p.salePrice ?? p.regularPrice),
     p.resellerPrice ?? Math.round((p.shopPrice ?? p.regularPrice) * 0.78),
+    p.maxResellerPrice || '',
     p.regularPrice,
     p.salePrice || '',
     p.costPrice || '',
@@ -2311,6 +2329,7 @@ app.post('/api/admin/products/import-csv', requireAdmin, (req: Request, res: Res
 
       const shopPriceRaw = rowMap['shopprice'] || rowMap['price'];
       const resellerPriceRaw = rowMap['resellerprice'];
+      const maxResellerPriceRaw = rowMap['maxresellerprice'] || rowMap['resellerpricelimit'] || rowMap['maxsellingprice'];
       const regPriceRaw = rowMap['regularprice'];
       const stockRaw = rowMap['stock'];
       const variantsRaw = rowMap['variants'] || rowMap['variant'];
@@ -2330,6 +2349,9 @@ app.post('/api/admin/products/import-csv', requireAdmin, (req: Request, res: Res
         if (resellerPriceRaw && !isNaN(Number(resellerPriceRaw))) {
           existing.resellerPrice = Number(resellerPriceRaw);
         }
+        if (maxResellerPriceRaw !== undefined && maxResellerPriceRaw !== '') {
+          existing.maxResellerPrice = !isNaN(Number(maxResellerPriceRaw)) ? Number(maxResellerPriceRaw) : undefined;
+        }
         if (rowMap['imageurl']) existing.mainImage = rowMap['imageurl'];
         
         // Update variants if provided in CSV
@@ -2344,6 +2366,7 @@ app.post('/api/admin/products/import-csv', requireAdmin, (req: Request, res: Res
         const determinedName = name || `আমদানিকৃত পণ্য ${sku}`;
         const determinedShopPrice = Number(shopPriceRaw || regPriceRaw || 1000);
         const determinedResellerPrice = Number(resellerPriceRaw || Math.round(determinedShopPrice * 0.78));
+        const determinedMaxResellerPrice = maxResellerPriceRaw && !isNaN(Number(maxResellerPriceRaw)) ? Number(maxResellerPriceRaw) : undefined;
 
         const newP: Product = {
           id: id || `prod-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -2356,6 +2379,7 @@ app.post('/api/admin/products/import-csv', requireAdmin, (req: Request, res: Res
           salePrice: undefined,
           shopPrice: determinedShopPrice,
           resellerPrice: determinedResellerPrice,
+          maxResellerPrice: determinedMaxResellerPrice,
           stock: Number(stockRaw) || 10,
           variants: variantsRaw ? parseVariantsFromCsv(variantsRaw) : [],
           images: rowMap['imageurl'] ? [rowMap['imageurl']] : ['/src/assets/images/hero_ecommerce_banner_1791605905466.jpg'],
@@ -2449,11 +2473,10 @@ async function startServer() {
 
   if (useVite) {
     const { createServer: createViteServer } = await import('vite');
-    const isHmrDisabled = process.env.DISABLE_HMR === 'true' || Boolean(process.env.K_SERVICE || process.env.CLOUD_RUN_JOB);
     vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: isHmrDisabled ? false : undefined,
+        hmr: false,
       },
       appType: 'spa',
     });

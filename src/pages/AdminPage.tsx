@@ -105,6 +105,7 @@ export const AdminPage: React.FC = () => {
   const [formSalePrice, setFormSalePrice] = useState('');
   const [formShopPrice, setFormShopPrice] = useState('');
   const [formResellerPrice, setFormResellerPrice] = useState('');
+  const [formMaxResellerPrice, setFormMaxResellerPrice] = useState('');
   const [formStock, setFormStock] = useState('20');
   const [formShowInShop, setFormShowInShop] = useState(true);
   const [formShowInReseller, setFormShowInReseller] = useState(true);
@@ -204,6 +205,12 @@ export const AdminPage: React.FC = () => {
   const [smtpSaveError, setSmtpSaveError] = useState<string | null>(null);
   const [smtpSaveSuccess, setSmtpSaveSuccess] = useState<string | null>(null);
   const [isCreatingBackup, setIsCreatingBackup] = useState(false);
+
+  // Product deletion & bulk action state
+  const [productToDelete, setProductToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
 
   // Fetch helpers with auth headers and 401 session expiry handling
   const authFetch = async (url: string, options: RequestInit = {}) => {
@@ -710,6 +717,7 @@ export const AdminPage: React.FC = () => {
     setFormSalePrice('');
     setFormShopPrice('');
     setFormResellerPrice('');
+    setFormMaxResellerPrice('');
     setFormStock('20');
     setFormShowInShop(true);
     setFormShowInReseller(true);
@@ -737,6 +745,7 @@ export const AdminPage: React.FC = () => {
     setFormSalePrice(prod.salePrice ? prod.salePrice.toString() : '');
     setFormShopPrice(currentShop.toString());
     setFormResellerPrice(prod.resellerPrice ? prod.resellerPrice.toString() : currentReseller.toString());
+    setFormMaxResellerPrice(prod.maxResellerPrice ? prod.maxResellerPrice.toString() : '');
     setFormStock(prod.stock.toString());
     setFormShowInShop(prod.showInShop !== false);
     setFormShowInReseller(prod.showInReseller !== false);
@@ -784,6 +793,15 @@ export const AdminPage: React.FC = () => {
       ? Number(formResellerPrice)
       : Math.round(effectiveShopPrice * 0.78);
 
+    const maxResPrice = formMaxResellerPrice && Number(formMaxResellerPrice) > 0
+      ? Number(formMaxResellerPrice)
+      : undefined;
+
+    if (maxResPrice !== undefined && maxResPrice < resPrice) {
+      showToast(`রিসেলারের সর্বোচ্চ বিক্রয় সীমা (৳${maxResPrice}) পাইকারি রেট (৳${resPrice}) এর চেয়ে কম হতে পারে না।`, 'error');
+      return;
+    }
+
     const stockCount = formStock && !isNaN(Number(formStock)) ? Math.max(0, Number(formStock)) : 20;
 
     // Parse variants string
@@ -813,6 +831,7 @@ export const AdminPage: React.FC = () => {
       salePrice: sPrice,
       shopPrice: effectiveShopPrice,
       resellerPrice: resPrice,
+      maxResellerPrice: maxResPrice,
       showInShop: formShowInShop,
       showInReseller: formShowInReseller,
       allowDropship: formAllowDropship,
@@ -1192,31 +1211,49 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  // Delete product
-  const handleDeleteProduct = async (id: string) => {
-    if (!window.confirm('আপনি কি নিশ্চিত যে পণ্যটি মুছে ফেলতে চান?')) return;
+  // Delete product prompt (uses responsive in-app modal instead of blocked window.confirm)
+  const handleDeleteProduct = (id: string) => {
+    const prod = products.find(p => p.id === id);
+    setProductToDelete({
+      id: id,
+      name: prod?.name || 'এই পণ্যটি',
+    });
+  };
+
+  // Execute deletion confirmed by user in UI modal
+  const confirmExecuteDelete = async () => {
+    if (!productToDelete) return;
+    const targetId = productToDelete.id;
+    setIsDeletingProduct(true);
     try {
-      const res = await authFetch(`/api/admin/products/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`/api/admin/products/${targetId}`, { method: 'DELETE' });
       if (res.ok) {
         showToast('পণ্যটি সফলভাবে মুছে ফেলা হয়েছে।', 'success');
-        setProducts(prev => prev.filter(p => p.id !== id));
+        setProducts(prev => prev.filter(p => p.id !== targetId));
+        setSelectedProductIds(prev => prev.filter(pId => pId !== targetId));
         try {
           const customProds = JSON.parse(localStorage.getItem('zx_custom_products') || '[]');
-          localStorage.setItem('zx_custom_products', JSON.stringify(customProds.filter((p: any) => p.id !== id)));
+          localStorage.setItem('zx_custom_products', JSON.stringify(customProds.filter((p: any) => p.id !== targetId)));
 
           const cached = JSON.parse(localStorage.getItem('zx_shop_cache') || '{}');
           if (Array.isArray(cached.products)) {
-            cached.products = cached.products.filter((p: any) => p.id !== id);
-            cached.featuredProducts = (cached.featuredProducts || []).filter((p: any) => p.id !== id);
-            cached.popularProducts = (cached.popularProducts || []).filter((p: any) => p.id !== id);
+            cached.products = cached.products.filter((p: any) => p.id !== targetId);
+            cached.featuredProducts = (cached.featuredProducts || []).filter((p: any) => p.id !== targetId);
+            cached.popularProducts = (cached.popularProducts || []).filter((p: any) => p.id !== targetId);
             localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
           }
         } catch {}
+        setProductToDelete(null);
         await loadDashboardData();
         await reloadBootstrap();
+      } else {
+        const errData = await res.json().catch(() => null);
+        showToast(errData?.error || 'পণ্যটি মুছতে ব্যর্থ হয়েছে।', 'error');
       }
     } catch {
-      showToast('পণ্যটি মুছতে ব্যর্থ হয়েছে।', 'error');
+      showToast('সার্ভার সমস্যার কারণে পণ্যটি মুছতে ব্যর্থ হয়েছে।', 'error');
+    } finally {
+      setIsDeletingProduct(false);
     }
   };
 
@@ -1259,11 +1296,19 @@ export const AdminPage: React.FC = () => {
 
   // Bulk action
   const handleBulkAction = async (action: 'publish' | 'unpublish' | 'delete') => {
-    if (selectedProductIds.length === 0) return;
-    if (action === 'delete' && !window.confirm(`আপনি কি নিশ্চিত যে নির্বাচিত ${selectedProductIds.length} টি পণ্য মুছে ফেলবেন?`)) {
+    if (selectedProductIds.length === 0) {
+      showToast('অনুগ্রহ করে অন্তত একটি পণ্য নির্বাচন করুন।', 'info');
       return;
     }
+    if (action === 'delete') {
+      setBulkDeleteConfirmOpen(true);
+      return;
+    }
+    executeBulkAction(action);
+  };
 
+  const executeBulkAction = async (action: 'publish' | 'unpublish' | 'delete') => {
+    setIsBulkActionLoading(true);
     try {
       const res = await authFetch('/api/admin/products/bulk', {
         method: 'POST',
@@ -1285,17 +1330,18 @@ export const AdminPage: React.FC = () => {
               localStorage.setItem('zx_shop_cache', JSON.stringify(cached));
             }
           } catch {}
-        } else {
-          try {
-            localStorage.removeItem('zx_shop_cache');
-          } catch {}
+          setSelectedProductIds([]);
+          setBulkDeleteConfirmOpen(false);
         }
-        setSelectedProductIds([]);
         await loadDashboardData();
         await reloadBootstrap();
+      } else {
+        showToast('বাল্ক অ্যাকশন ব্যর্থ হয়েছে।', 'error');
       }
     } catch {
-      showToast('অপারেশন ব্যর্থ হয়েছে।', 'error');
+      showToast('সার্ভার সমস্যার কারণে সম্পন্ন করা যায়নি।', 'error');
+    } finally {
+      setIsBulkActionLoading(false);
     }
   };
 
@@ -2157,6 +2203,11 @@ export const AdminPage: React.FC = () => {
                           <span className="bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
                             ৳{rp.toLocaleString('bn-BD')}
                           </span>
+                          {p.maxResellerPrice && (
+                            <span className="block text-[10px] text-amber-700 font-semibold mt-0.5" title="রিসেলারের সর্বোচ্চ বিক্রয় মূল্য সীমা">
+                              সর্বোচ্চ: ৳{p.maxResellerPrice.toLocaleString('bn-BD')}
+                            </span>
+                          )}
                         </td>
                         <td className="p-3">
                           <span className={`font-bold num-bn ${p.stock <= 5 ? 'text-rose-600' : 'text-slate-800'}`}>
@@ -2295,7 +2346,7 @@ export const AdminPage: React.FC = () => {
                   )}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2.5 sm:gap-3">
                   {/* ১. শপ বিক্রয় মূল্য */}
                   <div className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-sm flex flex-col justify-between">
                     <div>
@@ -2345,7 +2396,38 @@ export const AdminPage: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* ৩. MRP / নিয়মিত রেট */}
+                  {/* ৩. রিসেলারের সর্বোচ্চ বিক্রয় সীমা */}
+                  <div className="bg-white p-3 rounded-xl border border-amber-200 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-bold text-amber-800 block text-xs">
+                          রিসেলার সর্বোচ্চ সীমা (৳)
+                        </label>
+                        {formRegularPrice && Number(formRegularPrice) > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setFormMaxResellerPrice(formRegularPrice)}
+                            className="text-[10px] text-amber-700 hover:text-amber-900 underline font-bold cursor-pointer"
+                            title="MRP মূল্যকে সর্বোচ্চ সীমা হিসেবে বসান"
+                          >
+                            MRP বসান
+                          </button>
+                        )}
+                      </div>
+                      <input
+                        type="number"
+                        value={formMaxResellerPrice}
+                        onChange={e => setFormMaxResellerPrice(e.target.value)}
+                        placeholder={formRegularPrice || (formShopPrice ? String(Number(formShopPrice) + 500) : "যেমন: 2500")}
+                        className="w-full clay-inset px-2.5 py-2 text-amber-900 font-bold num-bn text-sm"
+                      />
+                    </div>
+                    <span className="text-[10px] text-amber-700 mt-1 block">
+                      {formMaxResellerPrice ? `রিসেলার সর্বোচ্চ ৳${Number(formMaxResellerPrice).toLocaleString('bn-BD')} পর্যন্ত বেচতে পারবে` : 'খালি রাখলে কোনো সর্বোচ্চ সীমা নেই'}
+                    </span>
+                  </div>
+
+                  {/* ৪. MRP / নিয়মিত রেট */}
                   <div className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-sm flex flex-col justify-between">
                     <div>
                       <label className="font-bold text-slate-700 block mb-1 text-xs">
@@ -2362,7 +2444,7 @@ export const AdminPage: React.FC = () => {
                     <div className="mt-1">
                       {formRegularPrice && formShopPrice && Number(formRegularPrice) > Number(formShopPrice) ? (
                         <span className="text-[10px] text-emerald-600 font-bold block">
-                          ✓ ৳{Number(formRegularPrice) - Number(formShopPrice)} ({Math.round(((Number(formRegularPrice) - Number(formShopPrice)) / Number(formRegularPrice)) * 100)}%) ছাড় ও কাটা দাগ দেখাবে
+                          ✓ ৳{Number(formRegularPrice) - Number(formShopPrice)} ({Math.round(((Number(formRegularPrice) - Number(formShopPrice)) / Number(formRegularPrice)) * 100)}%) ছাড়
                         </span>
                       ) : (
                         <span className="text-[10px] text-slate-500 block">কাটা দাগ দেখাতে (ঐচ্ছিক)</span>
@@ -2370,7 +2452,7 @@ export const AdminPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* ৪. স্টক পরিমাণ */}
+                  {/* ৫. স্টক পরিমাণ */}
                   <div className="bg-white p-3 rounded-xl border border-slate-200/90 shadow-sm flex flex-col justify-between">
                     <div>
                       <label className="font-bold text-slate-700 block mb-1 text-xs">
@@ -2405,6 +2487,14 @@ export const AdminPage: React.FC = () => {
                         ৳{(formResellerPrice ? Number(formResellerPrice) : Math.round(Number(formShopPrice) * 0.78)).toLocaleString('bn-BD')}
                       </strong>
                     </span>
+                    {formMaxResellerPrice && Number(formMaxResellerPrice) > 0 && (
+                      <span className="flex items-center gap-1">
+                        <span>সর্বোচ্চ বিক্রয় সীমা:</span>
+                        <strong className="text-amber-800 font-black">
+                          ৳{Number(formMaxResellerPrice).toLocaleString('bn-BD')}
+                        </strong>
+                      </span>
+                    )}
                     <span className="flex items-center gap-1">
                       <span>রিসেলারের সম্ভাব্য লাভ:</span>
                       <strong className="text-blue-700 font-black">
@@ -2597,6 +2687,22 @@ export const AdminPage: React.FC = () => {
 
             {/* Modal Actions: Save Draft & Publish Product */}
             <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
+              {editingProduct && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const idToDelete = editingProduct.id;
+                    const nameToDelete = editingProduct.name;
+                    setIsProductModalOpen(false);
+                    setProductToDelete({ id: idToDelete, name: nameToDelete });
+                  }}
+                  className="px-3 py-2 text-rose-600 hover:bg-rose-50 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 cursor-pointer sm:mr-auto"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>পণ্য মুছুন</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => setIsProductModalOpen(false)}
@@ -2623,6 +2729,94 @@ export const AdminPage: React.FC = () => {
               >
                 <Send className="w-4 h-4" />
                 <span>{isSavingProduct ? 'প্রকাশ হচ্ছে...' : 'পণ্য সরাসরি প্রকাশ করুন (Publish)'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Product Deletion Confirmation Modal */}
+      {productToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
+          <div className="clay-card p-5 sm:p-6 bg-white max-w-md w-full space-y-4 shadow-2xl rounded-2xl animate-in zoom-in-95 duration-150 border border-rose-100">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-base sm:text-lg font-black text-slate-900">
+                পণ্যটি মুছে ফেলতে চান?
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600">
+                "<strong>{productToDelete.name}</strong>" পণ্যটি তালিকা ও ডাটাবেজ থেকে স্থায়ীভাবে মুছে ফেলা হবে।
+              </p>
+            </div>
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingProduct}
+                onClick={() => setProductToDelete(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer text-center"
+              >
+                বাতিল
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingProduct}
+                onClick={confirmExecuteDelete}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+              >
+                {isDeletingProduct ? (
+                  <span>মুছে ফেলা হচ্ছে...</span>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>হ্যাঁ, মুছে ফেলুন</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {bulkDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
+          <div className="clay-card p-5 sm:p-6 bg-white max-w-md w-full space-y-4 shadow-2xl rounded-2xl animate-in zoom-in-95 duration-150 border border-rose-100">
+            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-2">
+              <h3 className="text-base sm:text-lg font-black text-slate-900">
+                নির্বাচিত {selectedProductIds.length} টি পণ্য মুছে ফেলতে চান?
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600">
+                নির্বাচিত সকল পণ্য একসাথে ডাটাবেজ থেকে স্থায়ীভাবে মুছে যাবে।
+              </p>
+            </div>
+            <div className="flex items-center gap-2.5 pt-2">
+              <button
+                type="button"
+                disabled={isBulkActionLoading}
+                onClick={() => setBulkDeleteConfirmOpen(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-100 cursor-pointer text-center"
+              >
+                বাতিল
+              </button>
+              <button
+                type="button"
+                disabled={isBulkActionLoading}
+                onClick={() => executeBulkAction('delete')}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-600/30 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-60"
+              >
+                {isBulkActionLoading ? (
+                  <span>মুছে ফেলা হচ্ছে...</span>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>হ্যাঁ, সব মুছুন ({selectedProductIds.length})</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

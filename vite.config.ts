@@ -10,9 +10,9 @@ export default defineConfig(() => {
       {
         name: 'hmr-suppressor',
         transformIndexHtml: {
-          order: 'post',
-          handler(html) {
-            const shimScript = `\n    <script>
+          order: 'pre',
+          handler() {
+            const shimScript = `
       (function() {
         if (typeof window === 'undefined') return;
         var origConsoleError = console.error;
@@ -39,72 +39,17 @@ export default defineConfig(() => {
             e.stopImmediatePropagation();
           }
         }, true);
-        var NativeWebSocket = window.WebSocket;
-        if (NativeWebSocket) {
-          window.WebSocket = function(url, protocols) {
-            var urlStr = String(url || '');
-            var protoStr = Array.isArray(protocols) ? protocols.join(',') : String(protocols || '');
-            var isViteHmr = protoStr.indexOf('vite') !== -1 || urlStr.indexOf('token=') !== -1 || urlStr.indexOf('@vite') !== -1;
-            if (isViteHmr) {
-              var target = new EventTarget();
-              var mockWs = {
-                url: urlStr,
-                readyState: 1,
-                CONNECTING: 0,
-                OPEN: 1,
-                CLOSING: 2,
-                CLOSED: 3,
-                protocol: 'vite-hmr',
-                extensions: '',
-                bufferedAmount: 0,
-                binaryType: 'blob',
-                send: function() {},
-                close: function() {},
-                addEventListener: function(type, listener, options) {
-                  target.addEventListener(type, listener, options);
-                  if (type === 'open') {
-                    setTimeout(function() {
-                      try {
-                        var ev = new Event('open');
-                        target.dispatchEvent(ev);
-                        if (typeof mockWs.onopen === 'function') mockWs.onopen(ev);
-                      } catch (_) {}
-                    }, 0);
-                  }
-                },
-                removeEventListener: function(type, listener, options) {
-                  target.removeEventListener(type, listener, options);
-                },
-                dispatchEvent: function(event) {
-                  return target.dispatchEvent(event);
-                },
-                onopen: null,
-                onclose: null,
-                onerror: null,
-                onmessage: null
-              };
-              setTimeout(function() {
-                try {
-                  var ev = new Event('open');
-                  target.dispatchEvent(ev);
-                  if (typeof mockWs.onopen === 'function') mockWs.onopen(ev);
-                } catch (_) {}
-              }, 0);
-              return mockWs;
-            }
-            return new NativeWebSocket(url, protocols);
-          };
-          window.WebSocket.prototype = NativeWebSocket.prototype;
-          window.WebSocket.CONNECTING = NativeWebSocket.CONNECTING;
-          window.WebSocket.OPEN = NativeWebSocket.OPEN;
-          window.WebSocket.CLOSING = NativeWebSocket.CLOSING;
-          window.WebSocket.CLOSED = NativeWebSocket.CLOSED;
-        }
       })();
-    </script>\n`;
-            return html.replace(/<head[^>]*>/i, function(match) { return match + shimScript; });
-          }
-        }
+`;
+            return [
+              {
+                tag: 'script',
+                children: shimScript,
+                injectTo: 'head-prepend',
+              },
+            ];
+          },
+        },
       },
       react(),
       tailwindcss(),
@@ -188,11 +133,9 @@ export default defineConfig(() => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var or in Cloud Run proxy environment.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
-      hmr: (process.env.DISABLE_HMR === 'true' || Boolean(process.env.K_SERVICE || process.env.CLOUD_RUN_JOB)) ? false : true,
-      // Disable file watching when DISABLE_HMR is true or in Cloud Run container.
-      watch: (process.env.DISABLE_HMR === 'true' || Boolean(process.env.K_SERVICE)) ? null : {},
+      // HMR is disabled in AI Studio environment
+      hmr: false,
+      watch: null,
     },
   };
 });

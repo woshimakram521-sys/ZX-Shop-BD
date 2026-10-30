@@ -28,67 +28,6 @@
             e.stopImmediatePropagation();
           }
         }, true);
-        var NativeWebSocket = window.WebSocket;
-        if (NativeWebSocket) {
-          window.WebSocket = function(url, protocols) {
-            var urlStr = String(url || '');
-            var protoStr = Array.isArray(protocols) ? protocols.join(',') : String(protocols || '');
-            var isViteHmr = protoStr.indexOf('vite') !== -1 || urlStr.indexOf('token=') !== -1 || urlStr.indexOf('@vite') !== -1;
-            if (isViteHmr) {
-              var target = new EventTarget();
-              var mockWs = {
-                url: urlStr,
-                readyState: 1,
-                CONNECTING: 0,
-                OPEN: 1,
-                CLOSING: 2,
-                CLOSED: 3,
-                protocol: 'vite-hmr',
-                extensions: '',
-                bufferedAmount: 0,
-                binaryType: 'blob',
-                send: function() {},
-                close: function() {},
-                addEventListener: function(type, listener, options) {
-                  target.addEventListener(type, listener, options);
-                  if (type === 'open') {
-                    setTimeout(function() {
-                      try {
-                        var ev = new Event('open');
-                        target.dispatchEvent(ev);
-                        if (typeof mockWs.onopen === 'function') mockWs.onopen(ev);
-                      } catch (_) {}
-                    }, 0);
-                  }
-                },
-                removeEventListener: function(type, listener, options) {
-                  target.removeEventListener(type, listener, options);
-                },
-                dispatchEvent: function(event) {
-                  return target.dispatchEvent(event);
-                },
-                onopen: null,
-                onclose: null,
-                onerror: null,
-                onmessage: null
-              };
-              setTimeout(function() {
-                try {
-                  var ev = new Event('open');
-                  target.dispatchEvent(ev);
-                  if (typeof mockWs.onopen === 'function') mockWs.onopen(ev);
-                } catch (_) {}
-              }, 0);
-              return mockWs;
-            }
-            return new NativeWebSocket(url, protocols);
-          };
-          window.WebSocket.prototype = NativeWebSocket.prototype;
-          window.WebSocket.CONNECTING = NativeWebSocket.CONNECTING;
-          window.WebSocket.OPEN = NativeWebSocket.OPEN;
-          window.WebSocket.CLOSING = NativeWebSocket.CLOSING;
-          window.WebSocket.CLOSED = NativeWebSocket.CLOSED;
-        }
       })();
     </script>
     <meta charset="UTF-8" />
